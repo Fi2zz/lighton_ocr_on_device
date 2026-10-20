@@ -1015,7 +1015,7 @@ git commit -m "feat(dart): add resident OCR worker isolate"
   - `Future<GgufKind> GgufProbe.detect(File file)`
   - `class ModelInfo { File main; File mmproj; int totalBytes; }`
   - `abstract class ModelRepository { Future<ModelInfo?> load(); Future<OcrConfig> loadConfig(); Future<void> saveConfig(OcrConfig); Future<void> deleteAll(); }`
-  - `class ModelStore implements ModelRepository`：`importMain(File, {onProgress})`、`importMmproj(File, {onProgress})`。
+  - `class ModelStore implements ModelRepository`：`ModelStore({required Directory root, int minMainBytes = 300 * 1024 * 1024, int minMmprojBytes = 50 * 1024 * 1024})`、`importMain(File, {onProgress})`、`importMmproj(File, {onProgress})`。
 
 - [ ] **Step 1: 写 GGUF 失败测试**
 
@@ -1044,7 +1044,7 @@ Expected: 编译失败。
 - 配置文件读写 round-trip；损坏 JSON 回退到默认 `OcrConfig`。
 - `deleteAll()` 后 `load()` 返回 null。
 
-测试文件用临时目录 + 稀疏文件（`RandomAccessFile.setPosition` + `writeByte`）构造大小，避免真的写 300MB。
+测试文件用临时目录；`ModelStore` 传 `minMainBytes: 1024`、`minMmprojBytes: 512`，用小文件覆盖大小校验，不写 300MB。
 
 - [ ] **Step 5: 运行，确认失败**
 
@@ -1094,10 +1094,23 @@ git commit -m "feat(dart): add GGUF validation and model store"
 
 `test/image_preprocess_test.dart`：
 
+- 先创建 EXIF 方向 6 的 fixture：
+
+```bash
+mkdir -p test/fixtures
+.venv-model/bin/python - <<'PY'
+from PIL import Image
+im = Image.new("RGB", (200, 400), "white")
+exif = im.getexif()
+exif[274] = 6
+im.save("test/fixtures/exif_orientation_6.jpg", exif=exif)
+PY
+```
+
 - 生成 4000×2000 PNG，`longestEdge=2048` → `width=2048`、`height=1024`、`rgb.length == 2048*1024*3`。
 - 生成 2000×4000 PNG → `width=1024`、`height=2048`。
 - 生成 400×200 PNG → 保持 400×200（不放大）。
-- 竖图带 EXIF orientation 6 的 JPEG → 输出宽高交换。
+- 读取 `test/fixtures/exif_orientation_6.jpg` → 输出宽高交换为 400×200。
 - 传入随机字节 → 抛 `OcrException`，`code == 'E_ENCODE'`。
 
 - [ ] **Step 2: 运行，确认失败**
