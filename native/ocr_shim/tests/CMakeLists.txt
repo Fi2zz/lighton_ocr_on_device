@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.22)
+project(ocr_text_utils_tests CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+add_executable(text_utils_test text_utils_test.cpp ../src/text_utils.cpp)
+target_include_directories(text_utils_test PRIVATE ../src)
+enable_testing()
+add_test(NAME text_utils_test COMMAND text_utils_test)

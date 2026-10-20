@@ -300,7 +300,7 @@ static void test_utf8_mixed_ascii() {
     Utf8StreamBuffer buf;
     std::string out;
     auto emit = [&](const char* d, size_t n) { out.append(d, n); };
-    const char bytes[] = "A\xE6\xB5\x8B" "B";
+    const char bytes[] = {'A', '\xE6', '\xB5', '\x8B', 'B'};
     buf.append(bytes, 2, emit);
     buf.append(bytes + 2, 3, emit);
     expect_eq(out, "A测B");
