@@ -90,12 +90,14 @@ OUT_DIR="${2:-$ROOT/build-models}"
 mkdir -p "$OUT_DIR"
 source "$ROOT/.venv-model/bin/activate"
 python "$ROOT/third_party/llama.cpp/convert_hf_to_gguf.py" "$MODEL_DIR" \
-  --outtype bf16 \
+  --outtype bf16 --no-mtp \
   --outfile "$OUT_DIR/lightonocr3-0.8b-bf16.gguf"
 python "$ROOT/third_party/llama.cpp/convert_hf_to_gguf.py" "$MODEL_DIR" \
   --mmproj --outtype f16 \
   --outfile "$OUT_DIR/mmproj-lightonocr3-0.8b-f16.gguf"
 ```
+
+> 本 checkpoint 的 `mtp_num_hidden_layers` 为 0，llama.cpp 转换器会因此断言失败；文本转换必须加 `--no-mtp`。mmproj 转换不要加。
 
 - [ ] **Step 4: 运行转换**
 

@@ -117,3 +117,11 @@ app.*.symbols
 !**/ios/**/default.perspectivev3
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 !/dev/ci/**/Gemfile.lock
+
+light_on_ocr_0.8b/*
+
+# LightOnOCR local artifacts
+*.gguf
+build-models/
+build/eval/
+.venv-model/
