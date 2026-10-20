@@ -712,6 +712,7 @@ git commit -m "feat(native): implement generation loop, stats, and cancellation"
 **Files:**
 - Modify: `android/app/build.gradle.kts`
 - Modify: `android/app/src/main/AndroidManifest.xml`
+- Modify: `android/gradle.properties`
 - Create: `android/app/src/main/cpp/CMakeLists.txt`
 
 **Interfaces:**
@@ -738,6 +739,7 @@ add_subdirectory(
 - `defaultConfig.externalNativeBuild.cmake.arguments += listOf("-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON")`
 - `externalNativeBuild.cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" }`
 - `packaging { jniLibs { useLegacyPackaging = true } }`
+- `android/gradle.properties` 增加 `disable-abi-filtering=true`，否则 Flutter 插件会清空 `abiFilters` 并重新加入 arm32/x86。
 
 - [ ] **Step 3: 修改 `AndroidManifest.xml`**
 
@@ -771,7 +773,7 @@ Expected: 至少一个 `LOAD` 的 `Align` 为 `0x4000`。
 
 ```bash
 git add android/app/build.gradle.kts android/app/src/main/AndroidManifest.xml \
-        android/app/src/main/cpp/CMakeLists.txt
+        android/gradle.properties android/app/src/main/cpp/CMakeLists.txt
 git commit -m "build(android): integrate llama.cpp shim with 16KB page alignment"
 ```
 
