@@ -237,7 +237,8 @@ size_t ocr_stats_size(void);
 - 默认 `longestEdge=2048`，可选 1536 / 2048 / 2560。
 - 默认：
   - `n_ctx=12288`
-  - `n_batch=4096`
+  - `n_batch=2048`
+  - `n_ubatch=512`（移动端内存上限；由 native 固定为 `min(n_batch, 512)`）
   - `n_ubatch=4096`
   - `image_max_tokens=4096`
   - `n_threads=min(6, Platform.numberOfProcessors)`

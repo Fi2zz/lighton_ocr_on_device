@@ -15,7 +15,7 @@
 - 只做 Android，`arm64-v8a`，`minSdk = 26`；iOS/macOS App 不在范围内。
 - 运行时完全离线；不得在 App 内发起模型下载或任何 OCR 网络请求。
 - 模型/量化产物不进入 git：`*.gguf`、`build-models/`、`build/eval/`、`.venv-model/` 必须被忽略。
-- 默认配置：`mode=grounding`、`longestEdge=2048`、`maxTokens=4096`、`nCtx=12288`、`nBatch=4096`、`imageMaxTokens=4096`、`seed=42`、`nThreads=min(6, Platform.numberOfProcessors)`、`temperature=0.2`。空 prompt 的 `plain` 模式保留，但不是默认。
+- 默认配置：`mode=grounding`、`longestEdge=2048`、`maxTokens=4096`、`nCtx=12288`、`nBatch=2048`、`nUbatch=512`、`imageMaxTokens=4096`、`seed=42`、`nThreads=min(6, Platform.numberOfProcessors)`、`temperature=0.2`。空 prompt 的 `plain` 模式保留，但不是默认。
 - 默认量化 Q8_0；只有第 18 节的实测触发时才改 Q4_K_M。
 - Prompt 必须逐字节匹配（`thinking` 与 `response` 各有一个前导空格）：
 
@@ -539,7 +539,7 @@ target_link_libraries(ocr_cli PRIVATE ocr_shim)
 1. `llama_backend_init()`。
 2. `llama_model_params`：`n_gpu_layers=0`、`use_mmap=true`、`progress_callback` 转发 `"load"` 进度。
 3. `llama_model_load_from_file`。
-4. `llama_context_params`：`n_ctx`、`n_batch`、`n_ubatch=n_batch`、`n_threads`、`flash_attn_type=LLAMA_FLASH_ATTN_TYPE_AUTO`。
+4. `llama_context_params`：`n_ctx`、`n_batch`、`n_ubatch=min(n_batch, 512)`、`n_threads`、`flash_attn_type=LLAMA_FLASH_ATTN_TYPE_AUTO`。
 5. `llama_init_from_model`。
 6. `mtmd_context_params_default()`：`use_gpu=false`、`print_timings=false`、`n_threads`、`image_max_tokens`、`media_marker=mtmd_default_marker()`。
 7. `mtmd_init_from_file(mmproj_path, model, params)`；若 `!mtmd_support_vision` 则失败。
@@ -811,7 +811,7 @@ test('defaults match spec', () {
   expect(c.longestEdge, 2048);
   expect(c.maxTokens, 4096);
   expect(c.nCtx, 12288);
-  expect(c.nBatch, 4096);
+  expect(c.nBatch, 2048);
   expect(c.imageMaxTokens, 4096);
   expect(c.seed, 42);
   expect(c.nThreads, greaterThan(0));
