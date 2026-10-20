@@ -891,7 +891,7 @@ import 'package:lighton_ocr_on_device/src/ocr/ocr_ffi.dart';
 
 void main() {
   final path = Platform.environment['OCR_SHIM_LIB'] ??
-      'build/ocr_cli/libocrshim.dylib';
+      'build/ocr_cli/ocr_shim/libocrshim.dylib';
   final ffi = OcrFfi.open(libraryPath: path);
   final size = ffi.statsSize();
   stdout.writeln('stats_size=$size');
