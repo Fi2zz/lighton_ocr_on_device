@@ -1329,8 +1329,8 @@ abstract class ModelFilePicker {
 class DeviceModelFilePicker implements ModelFilePicker {
   @override
   Future<File?> pickGgufFile() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.any);
-    final path = result?.files.single.path;
+    final result = await FilePicker.pickFile(type: FileType.any);
+    final path = result?.path;
     return path == null ? null : File(path);
   }
 }

@@ -49,6 +49,9 @@ class ModelStore implements ModelRepository {
   File get _mmprojFile => File(p.join(_modelsDir.path, mmprojFileName));
   File get _configFile => File(p.join(_modelsDir.path, 'config.json'));
 
+  File get mainFile => _mainFile;
+  File get mmprojFile => _mmprojFile;
+
   @override
   Future<ModelInfo?> load() async {
     if (!await _mainFile.exists() || !await _mmprojFile.exists()) {
