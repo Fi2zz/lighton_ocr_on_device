@@ -125,3 +125,7 @@ light_on_ocr_0.8b/*
 build-models/
 build/eval/
 .venv-model/
+
+# App lockfile is committed for reproducible builds
+!pubspec.lock
+samples/*
