@@ -15,7 +15,7 @@
 - 只做 Android，`arm64-v8a`，`minSdk = 26`；iOS/macOS App 不在范围内。
 - 运行时完全离线；不得在 App 内发起模型下载或任何 OCR 网络请求。
 - 模型/量化产物不进入 git：`*.gguf`、`build-models/`、`build/eval/`、`.venv-model/` 必须被忽略。
-- 默认配置：`longestEdge=2048`、`maxTokens=4096`、`nCtx=12288`、`nBatch=4096`、`imageMaxTokens=4096`、`seed=42`、`nThreads=min(6, Platform.numberOfProcessors)`、`temperature=0.2`。
+- 默认配置：`mode=grounding`、`longestEdge=2048`、`maxTokens=4096`、`nCtx=12288`、`nBatch=4096`、`imageMaxTokens=4096`、`seed=42`、`nThreads=min(6, Platform.numberOfProcessors)`、`temperature=0.2`。空 prompt 的 `plain` 模式保留，但不是默认。
 - 默认量化 Q8_0；只有第 18 节的实测触发时才改 Q4_K_M。
 - Prompt 必须逐字节匹配（`thinking` 与 `response` 各有一个前导空格）：
 
@@ -198,23 +198,25 @@ sips -Z 2048 -s format jpeg \
   -m "$ROOT/build-models/lightonocr3-0.8b-Q8_0.gguf" \
   --mmproj "$ROOT/build-models/mmproj-lightonocr3-0.8b-f16.gguf" \
   --image "$ROOT/build/eval/report-1-2048.jpg" \
-  -p "<__media__>" \
+  -p "<__media__>grounding" \
   -n 2048 --temp 0.2 -ngl 0 \
-  > "$ROOT/build/eval/report-1.md"
+  > "$ROOT/build/eval/report-1-grounding.md"
 ```
+
+> M0 实测：空 prompt（`<__media__>`）会输出图像描述；`grounding` 才能得到完整转录。因此冒烟和 App 默认都用 `grounding`。
 
 - [ ] **Step 5: 运行 M0 冒烟**
 
 Run: `bash tool/model/smoke_macos.sh`
-Expected: 退出码 0；`build/eval/report-1.md` 非空。
+Expected: 退出码 0；`build/eval/report-1-grounding.md` 非空。
 
 - [ ] **Step 6: 检查输出质量**
 
 Run:
 
 ```bash
-wc -c build/eval/report-1.md
-rg -n "<\|im_end\|>|<\|endoftext\|>" build/eval/report-1.md || true
+wc -c build/eval/report-1-grounding.md
+rg -n "<\|im_end\|>|<\|endoftext\|>" build/eval/report-1-grounding.md || true
 ```
 
 Expected: 字节数 > 100；不得出现特殊 token。人工查看文件，至少能辨认试卷标题或题干。
@@ -635,7 +637,7 @@ build/ocr_cli/ocr_cli \
   --model build-models/lightonocr3-0.8b-Q8_0.gguf \
   --mmproj build-models/mmproj-lightonocr3-0.8b-f16.gguf \
   --image build/eval/report-1-2048.ppm \
-  --mode plain --max-tokens 2048 --temp 0.2 --seed 42
+  --mode grounding --max-tokens 2048 --temp 0.2 --seed 42
 ```
 
 - [ ] **Step 2: CLI 实现 P6 PPM 读取**
@@ -691,7 +693,7 @@ build/ocr_cli/ocr_cli \
   --model build-models/lightonocr3-0.8b-Q8_0.gguf \
   --mmproj build-models/mmproj-lightonocr3-0.8b-f16.gguf \
   --image build/eval/report-1-2048.ppm \
-  --mode plain --max-tokens 4096 --cancel-after-ms 50; echo "exit=$?"
+  --mode grounding --max-tokens 4096 --cancel-after-ms 50; echo "exit=$?"
 ```
 
 Expected: 非 0 退出码（3），错误码 `E_CANCELLED`。
@@ -1150,6 +1152,84 @@ git commit -m "feat(dart): add EXIF-aware image preprocessing"
 
 ---
 
+## Task 11b: Grounding 输出解析
+
+**Files:**
+- Create: `lib/src/ocr/grounding.dart`
+- Create: `test/grounding_test.dart`
+
+**Interfaces:**
+- Produces:
+  - `class GroundingBlock { final String label; final List<int> bbox; final String text; final bool continues; }`
+  - `List<GroundingBlock> parseGrounding(String raw)`
+  - `String groundingToMarkdown(String raw, {Set<String> drop = const {}})`
+
+- [ ] **Step 1: 写失败测试**
+
+`test/grounding_test.dart`：
+
+```dart
+test('parses two blocks', () {
+  final blocks = parseGrounding(
+    '![title](10,20,30,40) # Hi\n\n![text](50,60,70,80) Body',
+  );
+  expect(blocks, hasLength(2));
+  expect(blocks[0].label, 'title');
+  expect(blocks[0].bbox, [10, 20, 30, 40]);
+  expect(blocks[0].text, '# Hi');
+  expect(blocks[1].text, 'Body');
+});
+
+test('continuation joins with a space', () {
+  final md = groundingToMarkdown(
+    '![text](0,0,10,10) one\n![text+](0,0,10,10) two',
+  );
+  expect(md, 'one two');
+});
+
+test('no markers returns raw', () {
+  expect(groundingToMarkdown('plain text'), 'plain text');
+});
+
+test('drop removes header and footer', () {
+  final md = groundingToMarkdown(
+    '![header](0,0,10,10) H\n![text](0,0,10,10) Body\n![footer](0,0,10,10) F',
+    drop: {'header', 'footer'},
+  );
+  expect(md, 'Body');
+});
+
+test('repairs dollar entities', () {
+  expect(groundingToMarkdown('![text](0,0,10,10) a &dollar;x&dollar; b'), 'a \$x\$ b');
+});
+```
+
+- [ ] **Step 2: 运行，确认失败**
+
+Run: `flutter test test/grounding_test.dart`
+Expected: 编译失败，`grounding.dart` 不存在。
+
+- [ ] **Step 3: 实现 `grounding.dart`**
+
+- Marker 正则：`!\[([A-Za-z_][\w-]*?)(\+?)\]\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)[ \t]*`。
+- `parseGrounding`：每个 marker 的 text 到下一个 marker 前；`trim()`；`continues = group(2) == '+'`。
+- 没有 marker 时返回空列表。
+- `groundingToMarkdown`：没有 marker 直接返回 `raw.trim()`；有 marker 时按 blocks 拼接，`drop` 中的 label 跳过，`continues` 且前一个保留块存在时用空格追加，否则用 `\n\n` 连接；最后把 `&dollar;` 替换为 `\$`。
+
+- [ ] **Step 4: 运行测试，确认通过**
+
+Run: `flutter test test/grounding_test.dart`
+Expected: All tests passed。
+
+- [ ] **Step 5: 提交**
+
+```bash
+git add lib/src/ocr/grounding.dart test/grounding_test.dart
+git commit -m "feat(dart): parse grounding output into markdown"
+```
+
+---
+
 ## Task 12: OcrService 状态机
 
 **Files:**
@@ -1160,7 +1240,7 @@ git commit -m "feat(dart): add EXIF-aware image preprocessing"
 - Consumes: `ModelRepository`、`OcrWorker`、`prepareImage`。
 - Produces:
   - `enum OcrServiceState { unconfigured, loading, ready, running, cancelling, failed }`
-  - `class OcrService extends ChangeNotifier`：`initialize`、`loadModel`、`recognize({required Uint8List encodedImage, OcrMode mode})`、`cancel`、`reset`、`updateConfig`。
+  - `class OcrService extends ChangeNotifier`：`initialize`、`loadModel`、`recognize({required Uint8List encodedImage, OcrMode mode = OcrMode.grounding})`、`cancel`、`reset`、`updateConfig`。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -1185,7 +1265,7 @@ Expected: 编译失败。
 - 构造：`ModelRepository modelStore`、`OcrWorker Function() workerFactory`。
 - `initialize()`：`modelStore.load()`；完整则 `ready`，否则 `unconfigured`。
 - `_ensureLoaded()`：worker 为 null 时创建并 `start`；发 `LoadCommand`；等待 `LoadingEvent(1.0)` 或 `FailedEvent`。
-- `recognize()`：检查状态、模型；清空 `partialText`/`result`/`error`；首次触发 `_ensureLoaded`；发 `RunCommand`；订阅事件直到 `DoneEvent`/`FailedEvent`。
+- `recognize()`：检查状态、模型；清空 `partialText`/`result`/`error`；首次触发 `_ensureLoaded`；发 `RunCommand`（默认 `mode=OcrMode.grounding`）；订阅事件直到 `DoneEvent`/`FailedEvent`。
 - `TokenEvent` 追加到 `partialText` 并 `notifyListeners()`。
 - `cancel()`：状态改 `cancelling`，调 `worker.cancel()`；等待 `FailedEvent(E_CANCELLED)`，超时 3s 则重建 worker 并回到 `ready`。
 - `reset()`：`worker.dispose()`，worker 置空，状态回到 `ready`/`unconfigured`。
@@ -1383,8 +1463,8 @@ git commit -m "feat(ui): add home page, image picking, and run flow"
 
 `test/result_page_test.dart`：
 
-- 传入 `OcrResult(text: '# 标题\n\n正文', stats: ...)`；默认“渲染”tab 显示“标题”“正文”。
-- 切到“原文”tab，显示原始 `# 标题`。
+- 传入 `OcrResult(text: '![title](10,20,30,40) # 标题\n\n![text](0,0,10,10) 正文', stats: ...)`；默认“渲染”tab 显示“标题”“正文”，不显示 `![title]` 标记。
+- 切到“原文”tab，显示原始 `![title](10,20,30,40)` 标记与文本。
 - 点击“复制”，`Clipboard.setData` 被调用（用 `TestDefaultBinaryMessengerBinding` mock 剪贴板通道）。
 - 找到“分享”“重新识别”“换一张”按钮。
 
@@ -1396,8 +1476,8 @@ Expected: 编译失败。
 - [ ] **Step 3: 实现结果页**
 
 - `DefaultTabController(length: 2)`；`TabBar`：渲染 / 原文。
-- 渲染：`MarkdownBody(data: result.text)`；原文：`SelectableText(result.text)`。
-- 顶部操作：复制（`Clipboard.setData`）、分享（`SharePlus.instance.share(ShareParams(text: result.text))`）。
+- 渲染：`MarkdownBody(data: groundingToMarkdown(result.text))`；原文：`SelectableText(result.text)`。
+- 顶部操作：复制（默认复制渲染后的 Markdown）、分享（`SharePlus.instance.share(ShareParams(text: groundingToMarkdown(result.text)))`）。
 - 底部 `ExpansionTile` 显示 `OcrStats`：load/encode/prefill/decode/total/tok/s/image tokens/peak RSS。
 - “重新识别”`Navigator.pop(context, true)`；“换一张”`Navigator.pop(context, false)`。
 

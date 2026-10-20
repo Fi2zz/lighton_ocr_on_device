@@ -225,8 +225,8 @@ size_t ocr_stats_size(void);
 <|im_start|>user\n<__media__>{prompt}<|im_end|>\n<|im_start|>assistant\n thinking\n\n response\n\n
 ```
 
-- 纯转录：`{prompt}` 为空字符串。
-- grounding：`{prompt}` 为 `grounding`。
+- `plain`：`{prompt}` 为空字符串。**保留但非默认**：M0 实测该 checkpoint 在空 prompt 下会输出“图像描述”（`这张图片展示了…`），而不是完整转录。
+- `grounding`：`{prompt}` 为 `grounding`。**第一版默认模式**：输出带 `![label](x1,y1,x2,y2)` 标记的完整 Markdown。渲染页去掉标记，原文页保留标记；不做布局框叠加。
 - 不加 system prompt。
 - `add_special=false`，Qwen 无 BOS。
 - 不在两段之间插入额外换行；图片标记与文本直接相邻。
@@ -376,7 +376,9 @@ worker 内使用 `package:image`：
 **结果页**
 
 - Tab：渲染 / 原文。
-- 操作：复制、分享、重新识别、换一张。
+- 渲染：用 `groundingToMarkdown` 去掉 `![label](x1,y1,x2,y2)` 标记，再交给 `flutter_markdown`。
+- 原文：保留模型原始输出，包括坐标标记。
+- 操作：复制、分享（默认分享渲染后的 Markdown）、重新识别、换一张。
 - 可展开耗时详情：load / encode / prefill / decode / total / tok/s / image tokens / peak RSS。
 - 错误时显示中文说明与“查看详情”。
 
@@ -422,6 +424,7 @@ native 层不得直接打印后静默返回；所有失败都写入错误缓冲�
 ### 9.1 单元测试
 
 - Prompt 字节序列精确匹配，覆盖空 prompt 与 `grounding`。
+- Grounding 解析：`![label](x1,y1,x2,y2)` 分块、`label+` 续块、无标记文本原样返回、渲染 Markdown 去掉标记。
 - UTF-8 分片缓冲：多字节字符跨 token 不产生乱码。
 - GGUF 头校验与主模型/mmproj 类型探测。
 - 图片缩放：横图、竖图、正方形；只缩不放；EXIF 方向。
@@ -504,6 +507,7 @@ M0 是硬门槛；失败即停止并汇报。
 以下参数不预先拍死，由 M4 数据决定：
 
 - 量化档位：若 Q8_0 满足 9.4，保持 Q8_0；否则改 Q4_K_M。若 Q4 质量明显下降且 Q8 仅略超时，优先降低图片长边而不是量化。
+- 默认 OCR 模式：`grounding`。空 prompt（`plain`）在该 checkpoint 上会退化为图像描述，不作为默认。
 - 默认 `longestEdge`：在质量可接受的前提下选耗时更低者。
 - 默认 `maxTokens`：覆盖 sample 最长输出并留 20% 余量。
 - 默认线程数：以真机实测最优值为准，范围 4–6。
@@ -512,3 +516,4 @@ M0 是硬门槛；失败即停止并汇报。
 
 - 2026-10-20：初稿，基于三块设计确认结果。
 - 2026-10-20：评审通过，进入实现计划阶段。
+- 2026-10-20：M0 实测发现空 prompt 退化为图像描述；第一版默认改为 `grounding`，渲染时去掉坐标标记，不做布局框叠加。
