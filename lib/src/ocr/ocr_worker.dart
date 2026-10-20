@@ -83,6 +83,8 @@ final class FailedEvent extends WorkerEvent {
 abstract class OcrWorker {
   Stream<WorkerEvent> get events;
 
+  Future<void> start();
+
   Future<void> load({
     required String modelPath,
     required String mmprojPath,
@@ -119,6 +121,7 @@ class IsolateOcrWorker implements OcrWorker {
 
   bool get isRunning => _running;
 
+  @override
   Future<void> start() async {
     if (_running) {
       return;

@@ -942,6 +942,7 @@ git commit -m "feat(dart): add FFI bindings and ABI smoke check"
   - `sealed class WorkerCommand` / `WorkerEvent` 及子类。
   - `abstract class OcrWorker`：
     - `Stream<WorkerEvent> get events`
+    - `Future<void> start()`
     - `Future<void> load({required String modelPath, required String mmprojPath, required OcrConfig config})`
     - `Future<void> run({required Uint8List encodedImage, required int longestEdge, required OcrMode mode, required int maxTokens})`
     - `Future<void> cancel()`
