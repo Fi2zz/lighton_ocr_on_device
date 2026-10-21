@@ -42,6 +42,7 @@ class _NoopWorker implements OcrWorker {
     required int longestEdge,
     required OcrMode mode,
     required int maxTokens,
+    int seed = 42,
   }) async {}
 
   @override
