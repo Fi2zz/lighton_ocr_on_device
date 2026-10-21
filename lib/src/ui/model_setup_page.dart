@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/model_file_picker.dart';
 import '../models/model_store.dart';
 import '../ocr/ocr_service.dart';
+import '../ocr/error_messages.dart';
 import '../ocr/ocr_types.dart';
 
 class ModelSetupPage extends StatefulWidget {
@@ -122,7 +123,7 @@ class _ModelSetupPageState extends State<ModelSetupPage> {
       await widget.service.initialize();
     } on OcrException catch (error) {
       if (mounted) {
-        setState(() => _error = _messageFor(error));
+        setState(() => _error = ocrErrorMessage(error));
       }
     } catch (error) {
       if (mounted) {
@@ -152,7 +153,7 @@ class _ModelSetupPageState extends State<ModelSetupPage> {
     setState(() => _busy = false);
     final error = widget.service.error;
     if (error != null) {
-      setState(() => _error = _messageFor(error));
+      setState(() => _error = ocrErrorMessage(error));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('模型已加载')),
@@ -203,16 +204,6 @@ class _ModelSetupPageState extends State<ModelSetupPage> {
     }
     setState(() => _busy = false);
     await _refresh();
-  }
-
-  String _messageFor(OcrException error) {
-    return switch (error.code) {
-      OcrErrorCode.ggufInvalid => '文件不是有效的 GGUF，或类型选错',
-      OcrErrorCode.modelMissing => '请先导入主模型和 mmproj',
-      OcrErrorCode.load => '模型加载失败：${error.message}',
-      OcrErrorCode.oom => '内存不足，请降低图片长边或换更小的量化',
-      _ => '${error.code}：${error.message}',
-    };
   }
 
   @override

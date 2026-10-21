@@ -43,6 +43,7 @@ class _FakeImageSource implements ImageSourceService {
 class _FakeWorker implements OcrWorker {
   _FakeWorker({this.autoComplete = true});
   final bool autoComplete;
+  OcrException? runFailure;
   final StreamController<WorkerEvent> _controller =
       StreamController<WorkerEvent>.broadcast();
 
@@ -69,8 +70,13 @@ class _FakeWorker implements OcrWorker {
     required int longestEdge,
     required OcrMode mode,
     required int maxTokens,
+    int seed = 42,
   }) async {
     runCalls++;
+    if (runFailure != null) {
+      _controller.add(FailedEvent(runFailure!.code, runFailure!.message));
+      return;
+    }
     if (!autoComplete) {
       return;
     }
@@ -201,6 +207,23 @@ void main() {
 
     expect(find.text('识别结果'), findsOneWidget);
     expect(find.textContaining('hello', findRichText: true), findsWidgets);
+  });
+
+  testWidgets('recognition error is shown in Chinese', (tester) async {
+    final worker = _FakeWorker()..runFailure = const OcrException('E_ENCODE', 'bad');
+    await pumpHome(
+      tester,
+      model: info(),
+      worker: worker,
+      image: _tinyPng,
+    );
+
+    await tester.tap(find.text('相册'));
+    await tester.pump();
+    await tester.tap(find.text('开始识别'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('图片编码失败，换一张图片'), findsOneWidget);
   });
 
   testWidgets('running state shows cancel', (tester) async {

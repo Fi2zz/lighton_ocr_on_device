@@ -28,12 +28,14 @@ final class RunCommand extends WorkerCommand {
   final int longestEdge;
   final OcrMode mode;
   final int maxTokens;
+  final int seed;
 
   const RunCommand({
     required this.encodedImage,
     required this.longestEdge,
     required this.mode,
     required this.maxTokens,
+    this.seed = 42,
   });
 }
 
@@ -73,6 +75,12 @@ final class DoneEvent extends WorkerEvent {
   const DoneEvent(this.result);
 }
 
+final class EngineReadyEvent extends WorkerEvent {
+  final int address;
+
+  const EngineReadyEvent(this.address);
+}
+
 final class FailedEvent extends WorkerEvent {
   final String code;
   final String message;
@@ -96,6 +104,7 @@ abstract class OcrWorker {
     required int longestEdge,
     required OcrMode mode,
     required int maxTokens,
+    int seed = 42,
   });
 
   Future<void> cancel();
@@ -104,6 +113,9 @@ abstract class OcrWorker {
 }
 
 class IsolateOcrWorker implements OcrWorker {
+  IsolateOcrWorker({this.cancelNative});
+
+  final Future<void> Function(int address)? cancelNative;
   final StreamController<WorkerEvent> _events =
       StreamController<WorkerEvent>.broadcast();
 
@@ -113,6 +125,7 @@ class IsolateOcrWorker implements OcrWorker {
   SendPort? _toWorker;
   Isolate? _isolate;
   Completer<SendPort>? _ready;
+  int? _engineAddress;
   bool _running = false;
   bool _disposed = false;
 
@@ -140,6 +153,9 @@ class IsolateOcrWorker implements OcrWorker {
         return;
       }
       if (message is WorkerEvent && !_events.isClosed) {
+        if (message is EngineReadyEvent) {
+          _engineAddress = message.address;
+        }
         _events.add(message);
       }
     });
@@ -152,7 +168,19 @@ class IsolateOcrWorker implements OcrWorker {
     _errorPort = RawReceivePort((message) => _onError(message));
     _isolate!.addOnExitListener(_exitPort!.sendPort);
     _isolate!.addErrorListener(_errorPort!.sendPort);
-    _toWorker = await _ready!.future;
+    try {
+      _toWorker = await _ready!.future.timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      _isolate?.kill(priority: Isolate.immediate);
+      _isolate = null;
+      _fromWorker?.close();
+      _fromWorker = null;
+      _exitPort?.close();
+      _exitPort = null;
+      _errorPort?.close();
+      _errorPort = null;
+      throw StateError('OCR worker did not start');
+    }
     _running = true;
   }
 
@@ -196,6 +224,7 @@ class IsolateOcrWorker implements OcrWorker {
     required int longestEdge,
     required OcrMode mode,
     required int maxTokens,
+    int seed = 42,
   }) async {
     _requireRunning();
     _toWorker!.send(RunCommand(
@@ -203,13 +232,34 @@ class IsolateOcrWorker implements OcrWorker {
       longestEdge: longestEdge,
       mode: mode,
       maxTokens: maxTokens,
+      seed: seed,
     ));
   }
 
   @override
   Future<void> cancel() async {
     _requireRunning();
-    _toWorker!.send(const CancelCommand());
+    final address = _engineAddress;
+    if (address == null) {
+      _toWorker!.send(const CancelCommand());
+      return;
+    }
+    try {
+      final nativeCancel = cancelNative;
+      if (nativeCancel != null) {
+        await nativeCancel(address);
+      } else {
+        await Isolate.run(() {
+          final ffi = OcrFfi.open();
+          ffi.cancel(Pointer<OcrEngine>.fromAddress(address));
+        });
+      }
+    } catch (_) {
+      // Fall back to the worker message if the cancel isolate cannot start.
+      if (_toWorker != null) {
+        _toWorker!.send(const CancelCommand());
+      }
+    }
   }
 
   void _requireRunning() {
@@ -273,6 +323,7 @@ Future<void> ocrWorkerMain(SendPort uiPort) async {
             uiPort.send(LoadingEvent(progress.fraction));
           },
         );
+        uiPort.send(EngineReadyEvent(engine!.address));
         uiPort.send(const LoadingEvent(1.0));
       } on OcrException catch (error) {
         uiPort.send(FailedEvent(error.code, error.message));
@@ -309,6 +360,7 @@ Future<void> ocrWorkerMain(SendPort uiPort) async {
           height: prepared.height,
           mode: message.mode,
           maxTokens: message.maxTokens,
+          seed: message.seed,
           onToken: (text) {
             output.write(text);
             uiPort.send(TokenEvent(text));

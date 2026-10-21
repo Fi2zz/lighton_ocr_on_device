@@ -32,6 +32,7 @@ class OcrService extends ChangeNotifier {
   bool _engineLoaded = false;
   bool _requiresReload = false;
   bool _disposed = false;
+  DateTime _lastTokenNotify = DateTime.fromMillisecondsSinceEpoch(0);
 
   Completer<void>? _loadCompleter;
   Completer<void>? _runCompleter;
@@ -53,15 +54,20 @@ class OcrService extends ChangeNotifier {
   bool get requiresReload => _requiresReload;
 
   Future<void> initialize() async {
+    final busy = _state == OcrServiceState.running ||
+        _state == OcrServiceState.loading ||
+        _state == OcrServiceState.cancelling;
     try {
       _config = await modelStore.loadConfig();
     } catch (_) {
       _config = OcrConfig.forDevice();
     }
     _modelInfo = await modelStore.load();
-    _state = _modelInfo == null
-        ? OcrServiceState.unconfigured
-        : OcrServiceState.ready;
+    if (!busy) {
+      _state = _modelInfo == null
+          ? OcrServiceState.unconfigured
+          : OcrServiceState.ready;
+    }
     _notify();
   }
 
@@ -151,6 +157,7 @@ class OcrService extends ChangeNotifier {
     _result = null;
     _error = null;
     _progress = null;
+    _lastTokenNotify = DateTime.fromMillisecondsSinceEpoch(0);
 
     if (!_engineLoaded) {
       await loadModel();
@@ -170,6 +177,7 @@ class OcrService extends ChangeNotifier {
         longestEdge: _config.longestEdge,
         mode: mode,
         maxTokens: _config.maxTokens,
+        seed: _config.seed,
       );
       await completer.future;
     } on OcrException catch (error) {
@@ -195,8 +203,9 @@ class OcrService extends ChangeNotifier {
     final completer = _runCompleter;
     if (completer != null) {
       try {
-        await completer.future.timeout(const Duration(seconds: 3));
+        await completer.future.timeout(const Duration(seconds: 10));
       } on TimeoutException {
+        _completeRun();
         await _restartWorker();
       }
     }
@@ -293,7 +302,11 @@ class OcrService extends ChangeNotifier {
 
     if (event is TokenEvent) {
       _partialText += event.text;
-      _notify();
+      final now = DateTime.now();
+      if (now.difference(_lastTokenNotify).inMilliseconds >= 200) {
+        _lastTokenNotify = now;
+        _notify();
+      }
       return;
     }
 
@@ -319,9 +332,13 @@ class OcrService extends ChangeNotifier {
         _state = OcrServiceState.failed;
         if (event.code == OcrErrorCode.workerCrash) {
           _engineLoaded = false;
+          final worker = _worker;
           _worker = null;
           _subscription?.cancel();
           _subscription = null;
+          if (worker != null) {
+            unawaited(worker.dispose());
+          }
         }
       }
       _completeLoad();

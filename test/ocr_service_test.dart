@@ -71,6 +71,7 @@ class FakeOcrWorker implements OcrWorker {
     required int longestEdge,
     required OcrMode mode,
     required int maxTokens,
+    int seed = 42,
   }) async {
     runCalls++;
     lastRun = RunCommand(
@@ -194,6 +195,19 @@ void main() {
     expect(worker.cancelCalls, 1);
     expect(service.state, OcrServiceState.ready);
     expect(service.partialText, isEmpty);
+  });
+
+  test('initialize during a run keeps running state', () async {
+    repo.info = info();
+    await service.initialize();
+
+    final future = service.recognize(encodedImage: Uint8List.fromList([1]));
+    await pumpEventQueue();
+    await service.initialize();
+    expect(service.state, OcrServiceState.running);
+
+    worker.emit(DoneEvent(const OcrResult(text: 'done', stats: OcrStats())));
+    await future;
   });
 
   test('load failure can be retried', () async {

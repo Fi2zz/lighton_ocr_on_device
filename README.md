@@ -97,7 +97,8 @@ App 启动后模型卡片应显示“已就绪”。
 - 第一版只做单图，不做 PDF 多页、批量、历史记录。
 - grounding 坐标只在“原文”中保留，不做布局框叠加。
 - `flutter_markdown` 对 HTML 表格支持有限；表格内容以原文 tab 为准。
-- 低内存设备可能被系统回收；模型越大越明显。
+- 低内存设备可能被系统回收；模型越大越明显。native OOM 有时会直接杀进程，App 只能处理 native 返回的 `E_OOM`。
+- 第一版只支持 JPEG/PNG；HEIC 会提示 `E_ENCODE`，请先转成 JPEG。
 
 ## 架构
 

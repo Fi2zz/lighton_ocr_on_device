@@ -54,6 +54,8 @@ class ModelStore implements ModelRepository {
 
   @override
   Future<ModelInfo?> load() async {
+    await _cleanupPart(_mainFile);
+    await _cleanupPart(_mmprojFile);
     if (!await _mainFile.exists() || !await _mmprojFile.exists()) {
       return null;
     }
@@ -88,7 +90,20 @@ class ModelStore implements ModelRepository {
   @override
   Future<void> saveConfig(OcrConfig config) async {
     await _modelsDir.create(recursive: true);
-    await _configFile.writeAsString(jsonEncode(config.toJson()));
+    final temp = File('${_configFile.path}.tmp');
+    await temp.writeAsString(jsonEncode(config.toJson()), flush: true);
+    await temp.rename(_configFile.path);
+  }
+
+  Future<void> _cleanupPart(File target) async {
+    final part = File('${target.path}.part');
+    try {
+      if (await part.exists()) {
+        await part.delete();
+      }
+    } on FileSystemException {
+      // Best-effort cleanup; a locked/stale part is harmless.
+    }
   }
 
   Future<void> importMain(
@@ -173,9 +188,7 @@ class ModelStore implements ModelRepository {
       await sink.close();
       sink = null;
 
-      if (await target.exists()) {
-        await target.delete();
-      }
+      // rename() replaces the old file atomically on Android/ext4.
       await part.rename(target.path);
       onProgress?.call(1.0);
     } catch (_) {

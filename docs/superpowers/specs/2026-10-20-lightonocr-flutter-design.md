@@ -71,7 +71,7 @@ GGUF: 主模型 + mmproj
 - native 层只暴露少量 C ABI，Dart 不直接接触 mtmd 的 chunk/batch 生命周期。
 - 模型只加载一次，常驻 worker isolate。
 - 图片解码与预处理在 worker 内完成，UI isolate 不承担 CPU 重活。
-- native 崩溃或 OOM 不拖垮 UI，错误可恢复。
+- native 返回的错误通过 worker 转成 UI 错误；native 进程级崩溃/OOM 仍可能被系统直接杀死，不能承诺进程级恢复。
 
 ## 4. 模型管线
 
@@ -343,7 +343,7 @@ worker 内使用 `package:image`：
 
 结果以 `TransferableTypedData` 发送，避免跨 isolate 复制。
 
-若 `package:image` 无法解码输入格式（例如 HEIC），回退到 Flutter 引擎的 `instantiateImageCodec` 在 UI isolate 解码，再交给 worker；回退路径只处理少见的格式，正常 JPEG/PNG 不走该分支。
+第一版只支持 JPEG/PNG（Android 相机/相册常见格式）；HEIC 等无法解码的格式返回 `E_ENCODE`，提示用户换图。后续如需要 HEIC，再在 UI isolate 用 `instantiateImageCodec` 做回退。
 
 ### 7.6 模型管理
 
@@ -418,7 +418,7 @@ worker 内使用 `package:image`：
 | `E_DECODE` | 生成失败 | 推理失败，查看详情 |
 | `E_MODE` | mode 参数非法 | 内部错误：未知的识别模式 |
 | `E_CANCELLED` | 用户取消 | 已取消 |
-| `E_WORKER_CRASH` | worker/native 崩溃 | 推理进程退出，可重试 |
+| `E_WORKER_CRASH` | worker 异常退出 | 推理进程退出，可重试；native 进程级崩溃会直接杀 App |
 | `E_BUSY` | 重复提交 | 正在识别，请稍候 |
 
 native 层不得直接打印后静默返回；所有失败都写入错误缓冲区。
@@ -492,7 +492,7 @@ M0 是硬门槛；失败即停止并汇报。
 | 中文识别质量差 | Demo 不可用 | M0 用中文 sample 验证；如实记录，后续评估 4B 或其他模型 |
 | 中端机性能不足 | 体验不可接受 | 按 9.4 顺序降参数量化；如实给出耗时 |
 | Android 16 16KB page | `.so` 无法加载 | 链接参数 + flexible page sizes，M1 真机验证 |
-| native 崩溃/OOM | App 崩溃 | worker 隔离、错误码、可重建；限制图片与上下文 |
+| native 崩溃/OOM | App 崩溃 | worker 隔离处理 Dart 级错误；native 进程级崩溃无法恢复，限制图片/上下文并给出内存提示 |
 | HTML 表格渲染差 | 结果页显示异常 | 保留“原文”tab；表格渲染后续再做 |
 
 ## 12. 交付物

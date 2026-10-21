@@ -6,10 +6,12 @@
 #include "mtmd-helper.h"
 
 #include <atomic>
+#include <cerrno>
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <exception>
+#include <new>
 #include <string>
 #include <vector>
 
@@ -135,7 +137,7 @@ ocr_engine* ocr_create(const char* model_path,
 
         engine->model = llama_model_load_from_file(model_path, mparams);
         if (engine->model == nullptr) {
-            set_error(err, err_cap, "E_LOAD", "failed to load text model");
+            set_error(err, err_cap, errno == ENOMEM ? "E_OOM" : "E_LOAD", "failed to load text model");
             ocr_destroy(engine);
             return nullptr;
         }
@@ -150,7 +152,7 @@ ocr_engine* ocr_create(const char* model_path,
 
         engine->ctx = llama_init_from_model(engine->model, cparams);
         if (engine->ctx == nullptr) {
-            set_error(err, err_cap, "E_LOAD", "failed to create llama context");
+            set_error(err, err_cap, errno == ENOMEM ? "E_OOM" : "E_LOAD", "failed to create llama context");
             ocr_destroy(engine);
             return nullptr;
         }
@@ -181,6 +183,8 @@ ocr_engine* ocr_create(const char* model_path,
         }
         engine->load_ms = (ggml_time_us() - load_start) / 1000.0;
         return engine;
+    } catch (const std::bad_alloc&) {
+        set_error(err, err_cap, "E_OOM", "out of memory while loading");
     } catch (const std::exception& ex) {
         set_error(err, err_cap, "E_LOAD", ex.what());
     } catch (...) {
@@ -404,7 +408,12 @@ int32_t ocr_run(ocr_engine* engine,
 
         const int32_t decode_rc = llama_decode(engine->ctx, batch);
         if (decode_rc != 0) {
-            run_rc = OCR_RUN_DECODE;
+            if (errno == ENOMEM) {
+                set_error(err, err_cap, "E_OOM", "out of memory while decoding");
+                run_rc = OCR_RUN_OOM;
+            } else {
+                run_rc = OCR_RUN_DECODE;
+            }
             break;
         }
         n_past++;
@@ -434,6 +443,9 @@ int32_t ocr_run(ocr_engine* engine,
     if (run_rc == OCR_RUN_CANCELLED) {
         set_error(err, err_cap, "E_CANCELLED", "cancelled by user");
         return OCR_RUN_CANCELLED;
+    }
+    if (run_rc == OCR_RUN_OOM) {
+        return OCR_RUN_OOM;
     }
     if (run_rc != OCR_RUN_OK) {
         set_error(err, err_cap, "E_DECODE", "generation failed");

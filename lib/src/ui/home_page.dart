@@ -7,6 +7,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../image/image_source.dart';
 import '../models/model_file_picker.dart';
 import '../models/model_store.dart';
+import '../ocr/error_messages.dart';
 import '../ocr/ocr_service.dart';
 import '../ocr/ocr_types.dart';
 import 'model_setup_page.dart';
@@ -71,6 +72,9 @@ class _HomePageState extends State<HomePage> {
     unawaited(WakelockPlus.disable().catchError((_) {}));
 
     if (!mounted) {
+      return;
+    }
+    if (widget.service.state != OcrServiceState.ready) {
       return;
     }
     final result = widget.service.result;
@@ -289,11 +293,24 @@ class _HomePageState extends State<HomePage> {
       color: Theme.of(context).colorScheme.errorContainer,
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Text(
-          '${error.code}：${error.message}',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onErrorContainer,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              ocrErrorMessage(error),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onErrorContainer,
+              ),
+            ),
+            if (error.message.isNotEmpty)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('查看详情'),
+                children: [
+                  SelectableText('${error.code}: ${error.message}'),
+                ],
+              ),
+          ],
         ),
       ),
     );

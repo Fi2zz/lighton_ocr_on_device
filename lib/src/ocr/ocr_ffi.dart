@@ -138,7 +138,15 @@ class OcrFfi {
   factory OcrFfi.open({String? libraryPath}) {
     final path = libraryPath ??
         (Platform.isAndroid ? 'libocrshim.so' : 'libocrshim.dylib');
-    return OcrFfi._(DynamicLibrary.open(path));
+    final ffi = OcrFfi._(DynamicLibrary.open(path));
+    final expected = sizeOf<OcrStatsNative>();
+    final actual = ffi.statsSize();
+    if (actual != expected) {
+      throw StateError(
+        'ocr_stats ABI mismatch: dart=$expected native=$actual',
+      );
+    }
+    return ffi;
   }
 
   int statsSize() => _statsSize();
@@ -214,7 +222,7 @@ class OcrFfi {
         tokenCallable = NativeCallable<OcrTokenNative>.isolateLocal(
           (Pointer<Uint8> data, int len, Pointer<Void> _) {
             if (len > 0) {
-              onToken(utf8.decode(data.asTypedList(len), allowMalformed: true));
+              onToken(utf8.decode(data.asTypedList(len)));
             }
           },
         );

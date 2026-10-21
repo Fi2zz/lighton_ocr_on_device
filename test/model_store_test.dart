@@ -85,6 +85,24 @@ void main() {
     );
   });
 
+  test('rejects mmproj in main slot', () async {
+    final mmproj = await _fakeGguf(temp, 'mm.gguf', 'clip.');
+    await expectLater(
+      store().importMain(mmproj),
+      throwsA(isA<OcrException>().having((e) => e.code, 'code', 'E_GGUF_INVALID')),
+    );
+  });
+
+  test('load cleans stale part files', () async {
+    final dir = Directory(p.join(temp.path, 'models'));
+    await dir.create(recursive: true);
+    final part = File(p.join(dir.path, 'lightonocr3-0.8b.gguf.part'));
+    await part.writeAsString('stale');
+
+    await store().load();
+    expect(await part.exists(), isFalse);
+  });
+
   test('config round trip', () async {
     final s = store();
     const config = OcrConfig(
