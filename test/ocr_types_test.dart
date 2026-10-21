@@ -18,6 +18,15 @@ void main() {
     expect(OcrConfig.fromJson(c.toJson()).toJson(), c.toJson());
   });
 
+  test('legacy config migrates to the four-thread default', () {
+    final legacy = <String, Object?>{
+      'longestEdge': 2048,
+      'maxTokens': 4096,
+      'nThreads': 8,
+    };
+    expect(OcrConfig.fromJson(legacy).nThreads, 4);
+  });
+
   test('stats tokens per second', () {
     const s = OcrStats(
       promptTokens: 100,

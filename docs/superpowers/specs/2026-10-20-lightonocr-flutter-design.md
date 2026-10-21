@@ -104,7 +104,7 @@ python third_party/llama.cpp/convert_hf_to_gguf.py light_on_ocr_0.8b/models \
 - `lightonocr3-0.8b-Q4_K_M.gguf`
 - `lightonocr3-0.8b-Q4KM-headQ4.gguf`（body Q4_K_M，output/token embedding Q4_0）
 
-默认使用 `Q4KM-headQ4`（body Q4_K_M，output/token embedding Q4_0；8GB 中端机实测：1280px 整页约 115s）。Q4_K_M 作为保底，Q8_0 作为质量选项；M4 根据实测结果按第 13 节的决策规则调整。
+默认使用 `Q4KM-headQ4`（body Q4_K_M，output/token embedding Q4_0；8GB 中端机 4 threads 实测：1024px 整页约 93s，1280px 约 105s）。Q4_K_M 作为保底，Q8_0 作为质量选项；M4 根据实测结果按第 13 节的决策规则调整。
 
 ### 4.3 M0 冒烟验证
 
@@ -453,7 +453,7 @@ native 层不得直接打印后静默返回；所有失败都写入错误缓冲�
 
 ### 9.4 验收指标
 
-以 `samples/report-1.jpg`、1280px、Q4KM-headQ4、8 threads 为默认基准：
+以 `samples/report-1.jpg`、1280px、Q4KM-headQ4、4 threads 为默认基准：
 
 | 指标 | 目标 | 可接受 |
 |---|---|---|
@@ -513,7 +513,7 @@ M0 是硬门槛；失败即停止并汇报。
 
 - 量化档位：8GB 中端机默认 `Q4KM-headQ4`（body Q4_K_M，output/token embedding Q4_0）；Q8_0 作为质量选项。若 Q8 在 1280px 下仍满足 9.4 可接受阈值，可在高端设备上切回 Q8。
 - 默认 OCR 模式：`grounding`。空 prompt（`plain`）在该 checkpoint 上会退化为图像描述，不作为默认。
-- 默认 `longestEdge`：1280（约 130s/页）；2048 作为精度模式（约 4–5 分钟/页）。
+- 默认 `longestEdge`：1280（约 105s/页）；2048 作为精度模式（约 2.5–3 分钟/页）。
 - 默认线程数：8（当前 SM6435 实测最优）；其他设备以实测为准。
 - 默认 `maxTokens`：覆盖 sample 最长输出并留 20% 余量。
 
@@ -524,3 +524,4 @@ M0 是硬门槛；失败即停止并汇报。
 - 2026-10-20：M0 实测发现空 prompt 退化为图像描述；第一版默认改为 `grounding`，渲染时去掉坐标标记，不做布局框叠加。
 - 2026-10-21：真机 smoke 发现 Flutter debug native `-O0` 导致 vision encode 数分钟；改为 debug 也加 `-O3`。1280px/Q4 整页约 130s，默认长边改为 1280。
 - 2026-10-21：output/token embedding 改 Q4_0（`Q4KM-headQ4`）后 1280px 整页约 115s，默认量化改用该档。
+- 2026-10-21：真机线程矩阵显示 4 threads 优于 8 threads（预填充快约 33%，解码快约 25–30%），默认线程数改为 4；旧配置自动迁移。1024px UI 实测 93.2s（编码 9.8s、预填充 6.6s、生成 76.0s）。

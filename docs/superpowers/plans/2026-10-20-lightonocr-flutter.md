@@ -15,7 +15,7 @@
 - 只做 Android，`arm64-v8a`，`minSdk = 26`；iOS/macOS App 不在范围内。
 - 运行时完全离线；不得在 App 内发起模型下载或任何 OCR 网络请求。
 - 模型/量化产物不进入 git：`*.gguf`、`build-models/`、`build/eval/`、`.venv-model/` 必须被忽略。
-- 默认配置：`mode=grounding`、`longestEdge=1280`、`maxTokens=2048`、`nCtx=8192`、`nBatch=2048`、`nUbatch=256`、`imageMaxTokens=4096`、`seed=42`、`nThreads=min(8, Platform.numberOfProcessors)`、`temperature=0.2`。空 prompt 的 `plain` 模式保留，但不是默认。
+- 默认配置：`mode=grounding`、`longestEdge=1280`、`maxTokens=2048`、`nCtx=8192`、`nBatch=2048`、`nUbatch=256`、`imageMaxTokens=4096`、`seed=42`、`nThreads=min(4, Platform.numberOfProcessors)`、`temperature=0.2`。空 prompt 的 `plain` 模式保留，但不是默认。
 - 默认量化 `Q4KM-headQ4`（body Q4_K_M，output/token embedding Q4_0；8GB 中端机实测）；Q8_0 作为质量选项。
 - Prompt 必须逐字节匹配（`thinking` 与 `response` 各有一个前导空格）：
 
@@ -860,7 +860,7 @@ Expected: 编译失败，`ocr_types.dart` 不存在。
 - [ ] **Step 4: 实现 `ocr_types.dart`**
 
 - `OcrConfig` 字段与默认值按 Global Constraints；`copyWith`、`toJson`、`fromJson`。
-- `const OcrConfig()` 的 `nThreads` 固定默认值为 `4`；`OcrConfig.forDevice()` 使用 `min(6, Platform.numberOfProcessors)`。`ModelStore.loadConfig` 的缺失/损坏回退使用 `forDevice()`。
+- `const OcrConfig()` 的 `nThreads` 固定默认值为 `4`；`OcrConfig.forDevice()` 使用 `min(4, Platform.numberOfProcessors)`。`ModelStore.loadConfig` 的缺失/损坏回退使用 `forDevice()`。
 - `OcrStats.totalMs` 为四段之和；`tokensPerSecond = outputTokens / (decodeMs / 1000)`，`decodeMs <= 0` 时为 0。
 - `OcrErrorCode` 常量：`modelMissing`、`ggufInvalid`、`load`、`oom`、`encode`、`decode`、`mode`、`cancelled`、`workerCrash`、`busy`。
 

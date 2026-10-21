@@ -81,23 +81,27 @@ App 启动后模型卡片应显示“已就绪”。
 
 | 配置 | 整页耗时 | 解码速度 | 峰值 RSS |
 |---|---|---|---|
-| 1280px + Q4KM-headQ4 | 约 115s* | 11.9 tok/s | 1.93GB |
-| 1280px + Q4_K_M | 约 130s* | 11.4 tok/s | 2.1GB |
-| 2048px + Q4KM-headQ4 | 约 3.5–4 分钟 | 约 11.9 tok/s | 约 2.1GB |
-| 1280px + Q8_0 | 约 4 分钟以上 | 4.1 tok/s（抽样） | 2.6GB |
+| **1024px + Q4KM-headQ4 + 4 threads（UI 实测）** | **93.2s** | **12.3 tok/s** | **1.70GB** |
+| 1280px + Q4KM-headQ4 + 4 threads（估算） | 约 105s | 12–16 tok/s | 约 1.7GB |
+| 1280px + Q4KM-headQ4 + 8 threads（旧默认） | 约 115s* | 11.9 tok/s | 1.93GB |
+| 2048px + Q4KM-headQ4 + 4 threads | 约 2.5–3 分钟 | 约 12–16 tok/s | 约 1.8GB |
+| 1280px + Q8_0 + 8 threads | 约 4 分钟以上 | 4.1 tok/s（抽样） | 2.6GB |
 
-* 隔离 smoke 数据；系统内存压力大时 UI 端可能明显更慢。
+* 1024px 为真机 UI 实测；1280px 由隔离 CLI 编码/预填充数据估算。系统内存压力大时 UI 端可能明显更慢。
+
+> 默认线程数已从 8 改为 4。SM6435 是 4×大核 + 4×小核，8 线程会把小核拉进来并增加同步开销；4 线程在这台机器上预填充快约 33%，解码快约 25–30%。旧配置会自动迁移到 4 线程。
 
 详细数据：
 
 - `docs/eval/2026-10-21-android-smoke.md`
 - `docs/eval/2026-10-21-device-bench.md`
 - `docs/eval/2026-10-21-device-acceptance.md`
+- `docs/eval/2026-10-21-thread-tuning.md`
 
 ## 已知限制
 
 - 1280px 对中文正文稳定，但数学公式/极小字号会误读；公式多的页面请切 2048px。
-- 2048px 在当前 8GB 中端机上约 4–5 分钟/页。
+- 2048px 在当前 8GB 中端机上约 2.5–3 分钟/页（4 threads）；公式多时再切。
 - 第一版只做单图，不做 PDF 多页、批量、历史记录。
 - grounding 坐标只在“原文”中保留，不做布局框叠加。
 - `flutter_markdown` 对 HTML 表格支持有限；表格内容以原文 tab 为准。

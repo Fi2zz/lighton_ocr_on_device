@@ -3,6 +3,8 @@ import 'dart:io';
 enum OcrMode { plain, grounding }
 
 class OcrConfig {
+  static const int _schemaVersion = 2;
+
   final int longestEdge;
   final int maxTokens;
   final int nThreads;
@@ -22,7 +24,10 @@ class OcrConfig {
   });
 
   factory OcrConfig.forDevice() {
-    final threads = Platform.numberOfProcessors < 8 ? Platform.numberOfProcessors : 8;
+    // On the 4x big + 4x little SoC used by this demo, four big-core threads
+    // are materially faster than eight threads (less migration/sync overhead).
+    final processors = Platform.numberOfProcessors;
+    final threads = processors < 4 ? processors : 4;
     return OcrConfig(nThreads: threads < 1 ? 1 : threads);
   }
 
@@ -47,6 +52,7 @@ class OcrConfig {
   }
 
   Map<String, Object?> toJson() => {
+        'version': _schemaVersion,
         'longestEdge': longestEdge,
         'maxTokens': maxTokens,
         'nThreads': nThreads,
@@ -62,10 +68,15 @@ class OcrConfig {
       return value is int ? value : fallback;
     }
 
+    final version = readInt('version', 1);
     return OcrConfig(
       longestEdge: readInt('longestEdge', 1280),
       maxTokens: readInt('maxTokens', 2048),
-      nThreads: readInt('nThreads', 4),
+      // Old saved configs used 8 threads by default. Migrate them to the
+      // measured four-thread default instead of preserving the slower value.
+      nThreads: version >= _schemaVersion
+          ? readInt('nThreads', 4)
+          : OcrConfig.forDevice().nThreads,
       seed: readInt('seed', 42),
       nCtx: readInt('nCtx', 8192),
       nBatch: readInt('nBatch', 2048),

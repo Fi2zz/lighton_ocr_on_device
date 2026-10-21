@@ -164,7 +164,10 @@ ocr_engine* ocr_create(const char* model_path,
         tparams.n_threads        = n_threads > 0 ? n_threads : 4;
         tparams.image_max_tokens = image_max_tokens > 0 ? image_max_tokens : 4096;
         tparams.media_marker     = mtmd_default_marker();
-        tparams.warmup           = false;
+        // Let CLIP pick flash attention and allocate its compute buffers at
+        // load time. Without warmup the encoder stays on the F32 attention
+        // path and the first encode includes allocation/metadata work.
+        tparams.warmup           = true;
 
         engine->mtmd = mtmd_init_from_file(mmproj_path, engine->model, tparams);
         if (engine->mtmd == nullptr) {
