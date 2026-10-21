@@ -15,8 +15,8 @@
 - 只做 Android，`arm64-v8a`，`minSdk = 26`；iOS/macOS App 不在范围内。
 - 运行时完全离线；不得在 App 内发起模型下载或任何 OCR 网络请求。
 - 模型/量化产物不进入 git：`*.gguf`、`build-models/`、`build/eval/`、`.venv-model/` 必须被忽略。
-- 默认配置：`mode=grounding`、`longestEdge=1280`、`maxTokens=4096`、`nCtx=12288`、`nBatch=2048`、`nUbatch=512`、`imageMaxTokens=4096`、`seed=42`、`nThreads=min(8, Platform.numberOfProcessors)`、`temperature=0.2`。空 prompt 的 `plain` 模式保留，但不是默认。
-- 默认量化 Q4_K_M（8GB 中端机实测）；Q8_0 作为质量选项。
+- 默认配置：`mode=grounding`、`longestEdge=1280`、`maxTokens=2048`、`nCtx=8192`、`nBatch=2048`、`nUbatch=256`、`imageMaxTokens=4096`、`seed=42`、`nThreads=min(8, Platform.numberOfProcessors)`、`temperature=0.2`。空 prompt 的 `plain` 模式保留，但不是默认。
+- 默认量化 `Q4KM-headQ4`（body Q4_K_M，output/token embedding Q4_0；8GB 中端机实测）；Q8_0 作为质量选项。
 - Prompt 必须逐字节匹配（`thinking` 与 `response` 各有一个前导空格）：
 
   ```
@@ -148,7 +148,7 @@ git commit -m "feat(model): add GGUF conversion pipeline"
 
 **Interfaces:**
 - Consumes: Task 1 的 BF16 主模型与 F16 mmproj。
-- Produces: `build-models/lightonocr3-0.8b-Q8_0.gguf`、`build-models/lightonocr3-0.8b-Q4_K_M.gguf`、`build/eval/report-1.md`、`build/eval/report-1-2048.jpg`。
+- Produces: `build-models/lightonocr3-0.8b-Q8_0.gguf`、`build-models/lightonocr3-0.8b-Q4_K_M.gguf`、`build-models/lightonocr3-0.8b-Q4KM-headQ4.gguf`、`build/eval/report-1.md`、`build/eval/report-1-2048.jpg`。
 
 - [ ] **Step 1: 写 `tool/model/quantize.sh`**
 
@@ -160,6 +160,8 @@ SRC="$ROOT/build-models/lightonocr3-0.8b-bf16.gguf"
 OUT="$ROOT/build-models"
 "$ROOT/build-llama/bin/llama-quantize" "$SRC" "$OUT/lightonocr3-0.8b-Q8_0.gguf" Q8_0
 "$ROOT/build-llama/bin/llama-quantize" "$SRC" "$OUT/lightonocr3-0.8b-Q4_K_M.gguf" Q4_K_M
+"$ROOT/build-llama/bin/llama-quantize" --output-tensor-type Q4_0 --token-embedding-type Q4_0 \
+  "$SRC" "$OUT/lightonocr3-0.8b-Q4KM-headQ4.gguf" Q4_K_M
 ```
 
 - [ ] **Step 2: 编译 `llama-mtmd-cli`**
@@ -542,7 +544,7 @@ target_link_libraries(ocr_cli PRIVATE ocr_shim)
 1. `llama_backend_init()`。
 2. `llama_model_params`：`n_gpu_layers=0`、`use_mmap=true`、`progress_callback` 转发 `"load"` 进度。
 3. `llama_model_load_from_file`。
-4. `llama_context_params`：`n_ctx`、`n_batch`、`n_ubatch=min(n_batch, 512)`、`n_threads`、`flash_attn_type=LLAMA_FLASH_ATTN_TYPE_AUTO`。
+4. `llama_context_params`：`n_ctx`、`n_batch`、`n_ubatch=min(n_batch, 256)`、`n_threads`、`flash_attn_type=LLAMA_FLASH_ATTN_TYPE_AUTO`。
 5. `llama_init_from_model`。
 6. `mtmd_context_params_default()`：`use_gpu=false`、`print_timings=false`、`n_threads`、`image_max_tokens`、`media_marker=mtmd_default_marker()`。
 7. `mtmd_init_from_file(mmproj_path, model, params)`；若 `!mtmd_support_vision` 则失败。
@@ -1603,7 +1605,7 @@ adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
 对 `samples/report-1.jpg` 到 `report-8.jpg`：
 
 1. 相册选图。
-2. 保持长边 2048、最大输出 4096。
+2. 保持长边 2048、最大输出 2048。
 3. 记录端到端耗时、stats、输出是否可读。
 4. 保存结果截图或复制文本到验收文档。
 
@@ -1647,7 +1649,7 @@ git commit -m "test(android): record 8-sample acceptance results"
 
 在真机上对 `report-1`、`report-5` 跑：
 
-- 量化：Q4_K_M、Q8_0。
+- 量化：Q4KM-headQ4、Q4_K_M、Q8_0。
 - 长边：1280、1536、2048（1024 作为低质量快速档）。
 - 线程：6、8。
 
@@ -1657,7 +1659,7 @@ git commit -m "test(android): record 8-sample acceptance results"
 
 按 spec 第 13 节规则：
 
-- 当前 8GB 中端机默认 Q4_K_M；Q8_0 作为质量选项。
+- 当前 8GB 中端机默认 Q4KM-headQ4；Q4_K_M 保底，Q8_0 作为质量选项。
 - 默认长边 1280；2048 作为精度模式。
 - 默认线程 8；其他设备以实测为准。
 

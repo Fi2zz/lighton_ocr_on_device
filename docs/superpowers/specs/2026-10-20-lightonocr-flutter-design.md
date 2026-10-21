@@ -102,8 +102,9 @@ python third_party/llama.cpp/convert_hf_to_gguf.py light_on_ocr_0.8b/models \
 
 - `lightonocr3-0.8b-Q8_0.gguf`
 - `lightonocr3-0.8b-Q4_K_M.gguf`
+- `lightonocr3-0.8b-Q4KM-headQ4.gguf`（body Q4_K_M，output/token embedding Q4_0）
 
-默认使用 Q4_K_M（8GB 中端机实测：1280px 整页约 130s）。Q8_0 作为质量选项保留；M4 根据实测结果按第 13 节的决策规则调整。
+默认使用 `Q4KM-headQ4`（body Q4_K_M，output/token embedding Q4_0；8GB 中端机实测：1280px 整页约 115s）。Q4_K_M 作为保底，Q8_0 作为质量选项；M4 根据实测结果按第 13 节的决策规则调整。
 
 ### 4.3 M0 冒烟验证
 
@@ -236,9 +237,9 @@ size_t ocr_stats_size(void);
 - Dart 侧将图片校正 EXIF 后缩放到长边 `longestEdge`，只缩不放。
 - 默认 `longestEdge=1280`，可选 1024 / 1280 / 1536 / 2048。
 - 默认：
-  - `n_ctx=12288`
+  - `n_ctx=8192`
   - `n_batch=2048`
-  - `n_ubatch=512`（移动端内存上限；由 native 固定为 `min(n_batch, 512)`）
+  - `n_ubatch=256`（移动端内存上限；由 native 固定为 `min(n_batch, 256)`）
   - `image_max_tokens=4096`
   - `n_threads=min(8, Platform.numberOfProcessors)`
 - 若 mtmd 报 non-causal 且 `image_max_tokens > n_ubatch`，M4 调整 `image_max_tokens` 或 `n_ubatch`。
@@ -373,7 +374,7 @@ worker 内使用 `package:image`：
 
 - 模型状态卡片：未配置 / 已就绪（显示总大小）/ 加载中 / 错误。
 - 图片预览；空状态提供“拍照”“相册”。
-- 参数：长边 1536/2048/2560；最大输出 token 2048/4096/8192。
+- 参数：长边 1024/1280/1536/2048；最大输出 token 2048/4096/8192，默认 2048。
 - 主按钮：未配置时“配置模型”，就绪时“开始识别”，运行中“取消”。
 - 运行中显示阶段进度、已生成字数、保持屏幕常亮。
 
@@ -452,7 +453,7 @@ native 层不得直接打印后静默返回；所有失败都写入错误缓冲�
 
 ### 9.4 验收指标
 
-以 `samples/report-1.jpg`、1280px、Q4_K_M、8 threads 为默认基准：
+以 `samples/report-1.jpg`、1280px、Q4KM-headQ4、8 threads 为默认基准：
 
 | 指标 | 目标 | 可接受 |
 |---|---|---|
@@ -510,7 +511,7 @@ M0 是硬门槛；失败即停止并汇报。
 
 以下参数不预先拍死，由 M4 数据决定：
 
-- 量化档位：8GB 中端机默认 Q4_K_M；Q8_0 作为质量选项。若 Q8 在 1280px 下仍满足 9.4 可接受阈值，可在高端设备上切回 Q8。
+- 量化档位：8GB 中端机默认 `Q4KM-headQ4`（body Q4_K_M，output/token embedding Q4_0）；Q8_0 作为质量选项。若 Q8 在 1280px 下仍满足 9.4 可接受阈值，可在高端设备上切回 Q8。
 - 默认 OCR 模式：`grounding`。空 prompt（`plain`）在该 checkpoint 上会退化为图像描述，不作为默认。
 - 默认 `longestEdge`：1280（约 130s/页）；2048 作为精度模式（约 4–5 分钟/页）。
 - 默认线程数：8（当前 SM6435 实测最优）；其他设备以实测为准。
@@ -521,4 +522,5 @@ M0 是硬门槛；失败即停止并汇报。
 - 2026-10-20：初稿，基于三块设计确认结果。
 - 2026-10-20：评审通过，进入实现计划阶段。
 - 2026-10-20：M0 实测发现空 prompt 退化为图像描述；第一版默认改为 `grounding`，渲染时去掉坐标标记，不做布局框叠加。
-- 2026-10-21：真机 smoke 发现 Flutter debug native `-O0` 导致 vision encode 数分钟；改为 debug 也加 `-O3`。1280px/Q4 整页约 130s，默认长边改为 1280，默认量化改为 Q4_K_M。
+- 2026-10-21：真机 smoke 发现 Flutter debug native `-O0` 导致 vision encode 数分钟；改为 debug 也加 `-O3`。1280px/Q4 整页约 130s，默认长边改为 1280。
+- 2026-10-21：output/token embedding 改 Q4_0（`Q4KM-headQ4`）后 1280px 整页约 115s，默认量化改用该档。

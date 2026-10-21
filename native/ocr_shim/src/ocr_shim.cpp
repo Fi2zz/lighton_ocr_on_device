@@ -123,7 +123,7 @@ ocr_engine* ocr_create(const char* model_path,
         return nullptr;
     }
     engine->n_batch = n_batch > 0 ? n_batch : 2048;
-    engine->n_ctx   = n_ctx > 0 ? n_ctx : 12288;
+    engine->n_ctx   = n_ctx > 0 ? n_ctx : 8192;
 
     try {
         llama_backend_init();
@@ -145,7 +145,7 @@ ocr_engine* ocr_create(const char* model_path,
         llama_context_params cparams = llama_context_default_params();
         cparams.n_ctx           = static_cast<uint32_t>(engine->n_ctx);
         cparams.n_batch         = static_cast<uint32_t>(engine->n_batch);
-        cparams.n_ubatch        = static_cast<uint32_t>(std::min<int32_t>(engine->n_batch, 512));
+        cparams.n_ubatch        = static_cast<uint32_t>(std::min<int32_t>(engine->n_batch, 256));
         cparams.n_threads       = n_threads > 0 ? n_threads : 4;
         cparams.n_threads_batch = n_threads > 0 ? n_threads : 4;
         cparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_AUTO;

@@ -353,6 +353,8 @@ Future<void> ocrWorkerMain(SendPort uiPort) async {
         );
 
         final output = StringBuffer();
+        final tokenBuffer = StringBuffer();
+        var tokenCount = 0;
         final stats = ffi.run(
           engine: engine!,
           rgb: prepared.rgb,
@@ -363,10 +365,18 @@ Future<void> ocrWorkerMain(SendPort uiPort) async {
           seed: message.seed,
           onToken: (text) {
             output.write(text);
-            uiPort.send(TokenEvent(text));
+            tokenBuffer.write(text);
+            tokenCount++;
+            if (tokenCount % 16 == 0) {
+              uiPort.send(TokenEvent(tokenBuffer.toString()));
+              tokenBuffer.clear();
+            }
           },
           onProgress: (progress) => uiPort.send(ProgressEvent(progress)),
         );
+        if (tokenBuffer.isNotEmpty) {
+          uiPort.send(TokenEvent(tokenBuffer.toString()));
+        }
         uiPort.send(DoneEvent(OcrResult(text: output.toString(), stats: stats)));
       } on OcrException catch (error) {
         uiPort.send(FailedEvent(error.code, error.message));

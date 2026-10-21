@@ -6,7 +6,7 @@
 
 | 参数 | 默认 |
 |---|---|
-| 量化 | Q4_K_M |
+| 量化 | Q4_K_M + Q4_0 output/token embeddings (`Q4KM-headQ4`) |
 | 长边 | 1280 |
 | 线程 | 8 |
 | 最大输出 | 4096 |
@@ -15,6 +15,12 @@
 2048px + Q4_K_M 作为“精度模式”，适合公式/小字多的页面，代价是 4–5 分钟/页。
 
 ## 已测组合
+
+### 1280 / Q4KM-headQ4 / 8 threads（整页）
+
+- encode 16.5s；image embedding decode 12.7s；文本 86.4s / 1032 tokens。
+- 端到端约 115s；约 11.9 tok/s；峰值 RSS 1.93GB。
+- 比标准 Q4_K_M 快约 20%，内存少约 100MB；body 仍是 Q4_K_M。
 
 ### 1280 / Q4_K_M / 8 threads（整页）
 

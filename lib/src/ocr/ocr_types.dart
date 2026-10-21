@@ -13,10 +13,10 @@ class OcrConfig {
 
   const OcrConfig({
     this.longestEdge = 1280,
-    this.maxTokens = 4096,
+    this.maxTokens = 2048,
     this.nThreads = 4,
     this.seed = 42,
-    this.nCtx = 12288,
+    this.nCtx = 8192,
     this.nBatch = 2048,
     this.imageMaxTokens = 4096,
   });
@@ -64,10 +64,10 @@ class OcrConfig {
 
     return OcrConfig(
       longestEdge: readInt('longestEdge', 1280),
-      maxTokens: readInt('maxTokens', 4096),
+      maxTokens: readInt('maxTokens', 2048),
       nThreads: readInt('nThreads', 4),
       seed: readInt('seed', 42),
-      nCtx: readInt('nCtx', 12288),
+      nCtx: readInt('nCtx', 8192),
       nBatch: readInt('nBatch', 2048),
       imageMaxTokens: readInt('imageMaxTokens', 4096),
     );

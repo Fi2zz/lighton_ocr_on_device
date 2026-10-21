@@ -123,7 +123,7 @@ void main() {
 
     final loaded = await store().loadConfig();
     expect(loaded.longestEdge, 1280);
-    expect(loaded.maxTokens, 4096);
+    expect(loaded.maxTokens, 2048);
   });
 
   test('deleteAll removes files and config', () async {

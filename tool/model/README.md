@@ -41,7 +41,11 @@ cmake --build build-llama --target llama-mtmd-cli llama-quantize -j
 bash tool/model/quantize.sh
 ```
 
-产物：`Q8_0`、`Q4_K_M`。
+产物：`Q8_0`、`Q4_K_M`、`Q4KM-headQ4`（body Q4_K_M，输出/embedding Q4_0）。
+
+当前 8GB 中端机默认 `Q4KM-headQ4` + 1280px：约 115s/页，11.9 tok/s，RSS 1.93GB。标准 Q4_K_M 约 130s；Q8_0 更慢但质量更高。
+
+GPU：本机 Adreno Vulkan 驱动在 llama.cpp shader 链接阶段失败（`Failed to link shaders`），当前版本只能用 CPU。
 
 ## 冒烟
 

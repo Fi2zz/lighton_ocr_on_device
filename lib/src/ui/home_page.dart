@@ -110,47 +110,52 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      body: ListenableBuilder(
-        listenable: widget.service,
-        builder: (context, _) {
-          final service = widget.service;
-          final state = service.state;
-          final running = state == OcrServiceState.running ||
-              state == OcrServiceState.cancelling;
-          final loading = state == OcrServiceState.loading;
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        children: [
+          ModelStatusCard(
+            service: widget.service,
+            onConfigure: _openSetup,
+          ),
+          const SizedBox(height: 16),
+          _imageCard(context),
+          const SizedBox(height: 16),
+          _optionsCard(context),
+          ListenableBuilder(
+            listenable: widget.service,
+            builder: (context, _) {
+              final service = widget.service;
+              final state = service.state;
+              final running = state == OcrServiceState.running ||
+                  state == OcrServiceState.cancelling;
+              final loading = state == OcrServiceState.loading;
 
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-            children: [
-              ModelStatusCard(
-                service: service,
-                onConfigure: _openSetup,
-              ),
-              const SizedBox(height: 16),
-              _imageCard(context),
-              const SizedBox(height: 16),
-              _optionsCard(context),
-              const SizedBox(height: 16),
-              if (loading || running) ...[
-                _progressCard(context, service),
-                const SizedBox(height: 16),
-              ],
-              if (service.error != null) ...[
-                _errorCard(context, service.error!),
-                const SizedBox(height: 16),
-              ],
-              _primaryButton(context, state, running, loading),
-              const SizedBox(height: 24),
-              Text(
-                '模型在设备本地运行，图片不会上传。',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          );
-        },
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (loading || running) ...[
+                    const SizedBox(height: 16),
+                    _progressCard(context, service),
+                  ],
+                  if (service.error != null) ...[
+                    const SizedBox(height: 16),
+                    _errorCard(context, service.error!),
+                  ],
+                  const SizedBox(height: 16),
+                  _primaryButton(context, state, running, loading),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+          Text(
+            '模型在设备本地运行，图片不会上传。',
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -5,8 +5,8 @@ void main() {
   test('defaults match spec', () {
     const c = OcrConfig();
     expect(c.longestEdge, 1280);
-    expect(c.maxTokens, 4096);
-    expect(c.nCtx, 12288);
+    expect(c.maxTokens, 2048);
+    expect(c.nCtx, 8192);
     expect(c.nBatch, 2048);
     expect(c.imageMaxTokens, 4096);
     expect(c.seed, 42);

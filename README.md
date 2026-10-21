@@ -32,7 +32,8 @@ bash tool/model/quantize.sh
 
 产物在 `build-models/`：
 
-- `lightonocr3-0.8b-Q4_K_M.gguf`（当前设备默认，约 505MB）
+- `lightonocr3-0.8b-Q4KM-headQ4.gguf`（当前设备默认，约 442MB；body Q4_K_M，输出/embedding Q4_0）
+- `lightonocr3-0.8b-Q4_K_M.gguf`（标准 Q4，约 505MB）
 - `lightonocr3-0.8b-Q8_0.gguf`（质量档，约 774MB）
 - `mmproj-lightonocr3-0.8b-f16.gguf`（约 195MB）
 
@@ -60,7 +61,7 @@ adb install -r build/app/outputs/flutter-apk/app-debug.apk
 
 ```bash
 PKG=com.example.lighton_ocr_on_device
-adb push build-models/lightonocr3-0.8b-Q4_K_M.gguf /data/local/tmp/main.gguf
+adb push build-models/lightonocr3-0.8b-Q4KM-headQ4.gguf /data/local/tmp/main.gguf
 adb push build-models/mmproj-lightonocr3-0.8b-f16.gguf /data/local/tmp/mmproj.gguf
 adb shell run-as $PKG mkdir -p files/models
 adb shell run-as $PKG cp /data/local/tmp/main.gguf files/models/lightonocr3-0.8b.gguf
@@ -72,7 +73,7 @@ App 启动后模型卡片应显示“已就绪”。
 ## 4. 使用
 
 1. 相册/拍照选图。
-2. 选择长边（默认 1280）和最大输出（默认 4096）。
+2. 选择长边（默认 1280）和最大输出（默认 2048）。
 3. 点“开始识别”；可取消。
 4. 结果页查看渲染 Markdown 或原始输出，复制/分享。
 
@@ -80,8 +81,9 @@ App 启动后模型卡片应显示“已就绪”。
 
 | 配置 | 整页耗时 | 解码速度 | 峰值 RSS |
 |---|---|---|---|
-| 1280px + Q4_K_M + 8 threads | 约 130s* | 11.4 tok/s | 2.1GB |
-| 2048px + Q4_K_M | 约 4–5 分钟 | 9.9 tok/s（抽样） | 2.3GB |
+| 1280px + Q4KM-headQ4 | 约 115s* | 11.9 tok/s | 1.93GB |
+| 1280px + Q4_K_M | 约 130s* | 11.4 tok/s | 2.1GB |
+| 2048px + Q4KM-headQ4 | 约 3.5–4 分钟 | 约 11.9 tok/s | 约 2.1GB |
 | 1280px + Q8_0 | 约 4 分钟以上 | 4.1 tok/s（抽样） | 2.6GB |
 
 * 隔离 smoke 数据；系统内存压力大时 UI 端可能明显更慢。

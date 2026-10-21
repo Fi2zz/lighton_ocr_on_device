@@ -18,7 +18,7 @@ struct Args {
     std::string image;
     std::string mode = "grounding";
     int32_t threads = 4;
-    int32_t ctx = 12288;
+    int32_t ctx = 8192;
     int32_t batch = 2048;
     int32_t image_max_tokens = 4096;
     int32_t max_tokens = 4096;
