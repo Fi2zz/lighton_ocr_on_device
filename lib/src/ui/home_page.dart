@@ -274,21 +274,142 @@ class _HomePageState extends State<HomePage> {
   Widget _progressCard(BuildContext context, OcrService service) {
     final progress = service.progress;
     final fraction = progress?.fraction;
+    final loading = service.state == OcrServiceState.loading;
+    final elapsed = loading ? service.loadElapsed : service.runElapsed;
+    final stage = service.activeStage ?? progress?.stage;
+    final theme = Theme.of(context);
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(progress?.stage ?? '准备中'),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _stageLabel(stage),
+                    style: theme.textTheme.titleSmall,
+                  ),
+                ),
+                Text(
+                  elapsed == null ? '' : _formatDuration(elapsed),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
             LinearProgressIndicator(value: fraction),
+            const SizedBox(height: 12),
+            if (loading)
+              _timingRow(
+                context,
+                '模型加载',
+                service.loadElapsed,
+                active: true,
+              )
+            else ...[
+              _timingRow(
+                context,
+                '图像预处理',
+                service.stageTiming('preprocess'),
+                active: service.activeStage == 'preprocess',
+              ),
+              _timingRow(
+                context,
+                '图像编码',
+                service.stageTiming('encode'),
+                active: service.activeStage == 'encode',
+              ),
+              _timingRow(
+                context,
+                '预填充',
+                service.stageTiming('prefill'),
+                active: service.activeStage == 'prefill',
+              ),
+              _timingRow(
+                context,
+                '生成文本',
+                service.stageTiming('decode'),
+                active: service.activeStage == 'decode',
+              ),
+              const Divider(height: 16),
+              _timingRow(context, '总耗时', service.runElapsed),
+            ],
             if (service.partialText.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text('已生成 ${service.partialText.length} 字符'),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('识别结果', style: theme.textTheme.titleSmall),
+                  ),
+                  Text(
+                    '已生成 ${service.partialText.length} 字符',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                constraints: const BoxConstraints(maxHeight: 220),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SingleChildScrollView(
+                  reverse: true,
+                  child: Text(
+                    _livePreview(service.partialText),
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              ),
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _timingRow(
+    BuildContext context,
+    String label,
+    Duration? duration, {
+    bool active = false,
+  }) {
+    final theme = Theme.of(context);
+    final color = active
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: active
+                ? const CircularProgressIndicator(strokeWidth: 2)
+                : null,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(color: color),
+            ),
+          ),
+          Text(
+            duration == null ? '—' : _formatDuration(duration),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: active ? color : theme.colorScheme.onSurface,
+              fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -346,4 +467,35 @@ class _HomePageState extends State<HomePage> {
       child: Text(loading ? '模型加载中…' : '开始识别'),
     );
   }
+}
+
+String _stageLabel(String? stage) {
+  return switch (stage) {
+    'load' => '模型加载',
+    'preprocess' => '图像预处理',
+    'encode' => '图像编码',
+    'prefill' => '预填充',
+    'decode' => '生成文本',
+    _ => '准备中',
+  };
+}
+
+String _livePreview(String text) {
+  const maxChars = 1500;
+  if (text.length <= maxChars) {
+    return text;
+  }
+  return '…（仅显示最近 $maxChars 字符）\n'
+      '${text.substring(text.length - maxChars)}';
+}
+
+String _formatDuration(Duration duration) {
+  if (duration.inMinutes >= 1) {
+    final seconds = duration.inSeconds % 60;
+    return '${duration.inMinutes}分${seconds.toString().padLeft(2, '0')}秒';
+  }
+  if (duration.inMilliseconds >= 1000) {
+    return '${(duration.inMilliseconds / 1000).toStringAsFixed(1)} s';
+  }
+  return '${duration.inMilliseconds} ms';
 }

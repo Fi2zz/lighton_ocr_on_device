@@ -34,6 +34,14 @@ class OcrService extends ChangeNotifier {
   bool _disposed = false;
   DateTime _lastTokenNotify = DateTime.fromMillisecondsSinceEpoch(0);
 
+  DateTime? _runStartedAt;
+  final Map<String, Duration> _stageTimings = {};
+  String? _activeStage;
+  DateTime? _activeStageStartedAt;
+  DateTime? _loadStartedAt;
+  Duration? _loadDuration;
+  Timer? _ticker;
+
   Completer<void>? _loadCompleter;
   Completer<void>? _runCompleter;
 
@@ -52,6 +60,35 @@ class OcrService extends ChangeNotifier {
   ModelInfo? get modelInfo => _modelInfo;
   bool get isModelConfigured => _modelInfo != null;
   bool get requiresReload => _requiresReload;
+
+  /// Current stage of the OCR run, including the implicit prefill phase.
+  String? get activeStage => _activeStage;
+
+  /// Wall-clock time since the current run started.
+  Duration get runElapsed {
+    final startedAt = _runStartedAt;
+    return startedAt == null
+        ? Duration.zero
+        : DateTime.now().difference(startedAt);
+  }
+
+  /// Completed or currently running time for [stage].
+  ///
+  /// Returns null when the stage has not been reached yet.
+  Duration? stageTiming(String stage) {
+    if (_activeStage == stage && _activeStageStartedAt != null) {
+      return DateTime.now().difference(_activeStageStartedAt!);
+    }
+    return _stageTimings[stage];
+  }
+
+  /// Time spent loading the model, live while loading.
+  Duration? get loadElapsed {
+    if (_state == OcrServiceState.loading && _loadStartedAt != null) {
+      return DateTime.now().difference(_loadStartedAt!);
+    }
+    return _loadDuration;
+  }
 
   Future<void> initialize() async {
     final busy = _state == OcrServiceState.running ||
@@ -90,6 +127,9 @@ class OcrService extends ChangeNotifier {
     _state = OcrServiceState.loading;
     _error = null;
     _progress = const OcrProgress(stage: 'load', fraction: 0);
+    _loadStartedAt = DateTime.now();
+    _loadDuration = null;
+    _startTicker();
     _notify();
 
     try {
@@ -120,6 +160,11 @@ class OcrService extends ChangeNotifier {
       _state = OcrServiceState.failed;
     } finally {
       _loadCompleter = null;
+      _stopTicker();
+      final loadStartedAt = _loadStartedAt;
+      if (loadStartedAt != null) {
+        _loadDuration = DateTime.now().difference(loadStartedAt);
+      }
     }
 
     if (_state == OcrServiceState.loading) {
@@ -166,6 +211,8 @@ class OcrService extends ChangeNotifier {
       }
     }
 
+    _progress = const OcrProgress(stage: 'preprocess', fraction: 0);
+    _startRunTimings();
     _state = OcrServiceState.running;
     _notify();
 
@@ -188,6 +235,7 @@ class OcrService extends ChangeNotifier {
       _state = OcrServiceState.failed;
     } finally {
       _runCompleter = null;
+      _finishRunTimings();
       _notify();
     }
   }
@@ -211,6 +259,7 @@ class OcrService extends ChangeNotifier {
     }
 
     if (_state == OcrServiceState.cancelling) {
+      _finishRunTimings();
       _state = OcrServiceState.ready;
       _partialText = '';
       _progress = null;
@@ -234,6 +283,10 @@ class OcrService extends ChangeNotifier {
     _partialText = '';
     _progress = null;
     _requiresReload = false;
+    _stopTicker();
+    _resetRunTimings();
+    _loadStartedAt = null;
+    _loadDuration = null;
     _state = _modelInfo == null
         ? OcrServiceState.unconfigured
         : OcrServiceState.ready;
@@ -285,6 +338,11 @@ class OcrService extends ChangeNotifier {
       _progress = OcrProgress(stage: 'load', fraction: event.fraction);
       if (event.fraction >= 1.0) {
         _engineLoaded = true;
+        final loadStartedAt = _loadStartedAt;
+        if (loadStartedAt != null) {
+          _loadDuration = DateTime.now().difference(loadStartedAt);
+        }
+        _stopTicker();
         if (_state == OcrServiceState.loading) {
           _state = OcrServiceState.ready;
         }
@@ -295,6 +353,7 @@ class OcrService extends ChangeNotifier {
     }
 
     if (event is ProgressEvent) {
+      _recordProgress(event.progress);
       _progress = event.progress;
       _notify();
       return;
@@ -311,6 +370,7 @@ class OcrService extends ChangeNotifier {
     }
 
     if (event is DoneEvent) {
+      _finishRunTimings();
       _result = event.result;
       _partialText = event.result.text;
       _error = null;
@@ -322,6 +382,7 @@ class OcrService extends ChangeNotifier {
     }
 
     if (event is FailedEvent) {
+      _finishRunTimings();
       if (event.code == OcrErrorCode.cancelled) {
         _state = OcrServiceState.ready;
         _partialText = '';
@@ -347,6 +408,79 @@ class OcrService extends ChangeNotifier {
     }
   }
 
+  void _startTicker() {
+    if (_ticker != null) {
+      return;
+    }
+    _ticker = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      if (_disposed) {
+        return;
+      }
+      if (_state == OcrServiceState.running ||
+          _state == OcrServiceState.cancelling ||
+          _state == OcrServiceState.loading) {
+        _notify();
+      }
+    });
+  }
+
+  void _stopTicker() {
+    _ticker?.cancel();
+    _ticker = null;
+  }
+
+  void _resetRunTimings() {
+    _runStartedAt = null;
+    _stageTimings.clear();
+    _activeStage = null;
+    _activeStageStartedAt = null;
+  }
+
+  void _startRunTimings() {
+    _resetRunTimings();
+    _runStartedAt = DateTime.now();
+    _startTicker();
+  }
+
+  void _finishRunTimings() {
+    _finishActiveStage();
+    _stopTicker();
+  }
+
+  void _recordProgress(OcrProgress progress) {
+    if (_activeStage != progress.stage) {
+      _finishActiveStage();
+      _beginStage(progress.stage);
+    }
+    if (progress.fraction < 1.0) {
+      return;
+    }
+
+    // The native shim has no explicit prefill event. The image embedding
+    // prefill starts right after encode completes and ends when decode starts.
+    if (progress.stage == 'encode') {
+      _finishActiveStage();
+      _beginStage('prefill');
+    } else {
+      _finishActiveStage();
+    }
+  }
+
+  void _beginStage(String stage) {
+    _activeStage = stage;
+    _activeStageStartedAt = DateTime.now();
+  }
+
+  void _finishActiveStage() {
+    final stage = _activeStage;
+    final startedAt = _activeStageStartedAt;
+    if (stage != null && startedAt != null) {
+      _stageTimings[stage] = DateTime.now().difference(startedAt);
+    }
+    _activeStage = null;
+    _activeStageStartedAt = null;
+  }
+
   void _completeLoad() {
     final completer = _loadCompleter;
     if (completer != null && !completer.isCompleted) {
@@ -370,6 +504,7 @@ class OcrService extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _stopTicker();
     _subscription?.cancel();
     _subscription = null;
     final worker = _worker;

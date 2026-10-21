@@ -99,6 +99,10 @@ class _FakeWorker implements OcrWorker {
   Future<void> dispose() async {
     await _controller.close();
   }
+
+  void emit(WorkerEvent event) {
+    _controller.add(event);
+  }
 }
 
 final Uint8List _tinyPng = base64Decode(
@@ -226,8 +230,32 @@ void main() {
     expect(find.text('图片编码失败，换一张图片'), findsOneWidget);
   });
 
+  testWidgets('running state shows live recognition result', (tester) async {
+    final worker = _FakeWorker(autoComplete: false);
+    final service = await pumpHome(
+      tester,
+      model: info(),
+      worker: worker,
+      image: _tinyPng,
+    );
+
+    await tester.tap(find.text('相册'));
+    await tester.pump();
+    await tester.tap(find.text('开始识别'));
+    await tester.pump();
+
+    worker.emit(const TokenEvent('第一行\n第二行'));
+    await tester.pump();
+
+    expect(find.text('识别结果'), findsOneWidget);
+    expect(find.textContaining('第一行'), findsOneWidget);
+
+    await service.cancel();
+    await tester.pump();
+  });
+
   testWidgets('running state shows cancel', (tester) async {
-    await pumpHome(
+    final service = await pumpHome(
       tester,
       model: info(),
       worker: _FakeWorker(autoComplete: false),
@@ -240,5 +268,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('取消'), findsOneWidget);
+    expect(find.text('图像编码'), findsOneWidget);
+    expect(find.text('总耗时'), findsOneWidget);
+
+    await service.cancel();
+    await tester.pump();
   });
 }

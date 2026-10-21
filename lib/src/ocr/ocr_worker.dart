@@ -341,13 +341,16 @@ Future<void> ocrWorkerMain(SendPort uiPort) async {
         continue;
       }
       try {
+        final runWatch = Stopwatch()..start();
         uiPort.send(
           const ProgressEvent(OcrProgress(stage: 'preprocess', fraction: 0)),
         );
+        final preprocessWatch = Stopwatch()..start();
         final prepared = await prepareImage(
           message.encodedImage,
           longestEdge: message.longestEdge,
         );
+        preprocessWatch.stop();
         uiPort.send(
           const ProgressEvent(OcrProgress(stage: 'preprocess', fraction: 1)),
         );
@@ -355,7 +358,7 @@ Future<void> ocrWorkerMain(SendPort uiPort) async {
         final output = StringBuffer();
         final tokenBuffer = StringBuffer();
         var tokenCount = 0;
-        final stats = ffi.run(
+        final nativeStats = ffi.run(
           engine: engine!,
           rgb: prepared.rgb,
           width: prepared.width,
@@ -377,6 +380,11 @@ Future<void> ocrWorkerMain(SendPort uiPort) async {
         if (tokenBuffer.isNotEmpty) {
           uiPort.send(TokenEvent(tokenBuffer.toString()));
         }
+        runWatch.stop();
+        final stats = nativeStats.copyWith(
+          preprocessMs: preprocessWatch.elapsedMicroseconds / 1000.0,
+          endToEndMs: runWatch.elapsedMicroseconds / 1000.0,
+        );
         uiPort.send(DoneEvent(OcrResult(text: output.toString(), stats: stats)));
       } on OcrException catch (error) {
         uiPort.send(FailedEvent(error.code, error.message));

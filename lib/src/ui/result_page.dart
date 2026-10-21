@@ -137,11 +137,18 @@ class _StatsTile extends StatelessWidget {
         title: const Text('耗时详情'),
         childrenPadding: const EdgeInsets.only(bottom: 8),
         children: [
-          _row('加载', _formatMs(stats.loadMs)),
+          _row('模型加载', _formatMs(stats.loadMs)),
+          if (stats.preprocessMs > 0)
+            _row('图像预处理', _formatMs(stats.preprocessMs)),
           _row('图像编码', _formatMs(stats.encodeMs)),
           _row('预填充', _formatMs(stats.prefillMs)),
           _row('生成', _formatMs(stats.decodeMs)),
-          _row('总计', _formatMs(stats.totalMs)),
+          _row(
+            stats.endToEndMs > 0 ? '端到端' : '总计',
+            _formatMs(
+              stats.endToEndMs > 0 ? stats.endToEndMs : stats.totalMs,
+            ),
+          ),
           _row('速度', '${stats.tokensPerSecond.toStringAsFixed(2)} tok/s'),
           _row('图片 token', '${stats.imageTokens}'),
           _row('峰值内存', _formatKb(stats.peakRssKb)),

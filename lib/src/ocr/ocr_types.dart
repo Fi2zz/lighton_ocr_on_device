@@ -83,6 +83,8 @@ class OcrStats {
   final double prefillMs;
   final double decodeMs;
   final int peakRssKb;
+  final double preprocessMs;
+  final double endToEndMs;
 
   const OcrStats({
     this.promptTokens = 0,
@@ -93,11 +95,40 @@ class OcrStats {
     this.prefillMs = 0,
     this.decodeMs = 0,
     this.peakRssKb = 0,
+    this.preprocessMs = 0,
+    this.endToEndMs = 0,
   });
+
+  OcrStats copyWith({
+    int? promptTokens,
+    int? outputTokens,
+    int? imageTokens,
+    double? loadMs,
+    double? encodeMs,
+    double? prefillMs,
+    double? decodeMs,
+    int? peakRssKb,
+    double? preprocessMs,
+    double? endToEndMs,
+  }) {
+    return OcrStats(
+      promptTokens: promptTokens ?? this.promptTokens,
+      outputTokens: outputTokens ?? this.outputTokens,
+      imageTokens: imageTokens ?? this.imageTokens,
+      loadMs: loadMs ?? this.loadMs,
+      encodeMs: encodeMs ?? this.encodeMs,
+      prefillMs: prefillMs ?? this.prefillMs,
+      decodeMs: decodeMs ?? this.decodeMs,
+      peakRssKb: peakRssKb ?? this.peakRssKb,
+      preprocessMs: preprocessMs ?? this.preprocessMs,
+      endToEndMs: endToEndMs ?? this.endToEndMs,
+    );
+  }
 
   double get totalMs => loadMs + encodeMs + prefillMs + decodeMs;
 
-  double get tokensPerSecond => decodeMs <= 0 ? 0 : outputTokens * 1000 / decodeMs;
+  double get tokensPerSecond =>
+      decodeMs <= 0 ? 0 : outputTokens * 1000 / decodeMs;
 }
 
 class OcrResult {
