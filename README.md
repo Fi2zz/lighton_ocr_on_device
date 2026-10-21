@@ -82,19 +82,25 @@ App 启动后模型卡片应显示“已就绪”。
 | 配置 | 整页耗时 | 解码速度 | 峰值 RSS |
 |---|---|---|---|
 | **1024px + Q4KM-headQ4 + 4 threads（UI 实测）** | **93.2s** | **12.3 tok/s** | **1.70GB** |
-| 1280px + Q4KM-headQ4 + 4 threads（估算） | 约 105s | 12–16 tok/s | 约 1.7GB |
+| 1280px + Q4KM-headQ4 + 4 threads（CLI + UI 估算） | 约 90–105s | 16–17 tok/s | 约 1.7GB |
 | 1280px + Q4KM-headQ4 + 8 threads（旧默认） | 约 115s* | 11.9 tok/s | 1.93GB |
-| 2048px + Q4KM-headQ4 + 4 threads | 约 2.5–3 分钟 | 约 12–16 tok/s | 约 1.8GB |
-| 1280px + Q8_0 + 8 threads | 约 4 分钟以上 | 4.1 tok/s（抽样） | 2.6GB |
+| 2048px 全量 + Q4KM-headQ4 + 4 threads | 约 3–3.5 分钟 | 15–16 tok/s | 约 1.8GB |
+| 2048px + cap 2560 tokens + 4 threads（推荐折中，估算） | 约 3 分钟 | 约 16 tok/s | 约 1.7GB |
+| 2048px + cap 2048 tokens + 4 threads（快速档） | 138.8s | 16.3 tok/s | 1.63GB |
+| 1280px + Q8_0 + 8 threads（主模型 Q8，非 mmproj） | 约 4 分钟以上 | 4.1 tok/s（抽样） | 2.6GB |
 
-* 1024px 为真机 UI 实测；1280px 由隔离 CLI 编码/预填充数据估算。系统内存压力大时 UI 端可能明显更慢。
+* 1024px 为 release App 实测；1280/2048 主要来自隔离 CLI（与 App 共用同一 shim）。CLI 跑在 `system` cgroup，UI 跑在 `top-app`，绝对值不要直接混比；系统内存压力大时 UI 端可能明显更慢。
+* 2048 的 cap 是 `image_max_tokens`：cap 2560 对应有效长边约 1865px，cap 2048 约 1660px；两者仍高于 grounding 建议的 1024-token 下限。
 
-> 默认线程数已从 8 改为 4。SM6435 是 4×大核 + 4×小核，8 线程会把小核拉进来并增加同步开销；4 线程在这台机器上预填充快约 33%，解码快约 25–30%。旧配置会自动迁移到 4 线程。
+> 默认线程数已从 8 改为 4。SM6435 是 4×大核 + 4×小核，8 线程会把小核拉进来并增加同步开销；4 线程在这台机器上预填充快约 20–33%，解码快约 25–50%（不同轮次/负载有波动）。旧配置会自动迁移到 4 线程。
+>
+> mmproj 用 F16：Q8_0 mmproj 在这台 SoC 上编码慢约 22%，只省约 100MB，不推荐用于速度。
 
 详细数据：
 
 - `docs/eval/2026-10-21-optimization-conclusion.md`（结论）
 - `docs/eval/2026-10-21-thread-tuning.md`
+- `docs/eval/2026-10-21-encode-token-cap.md`（编码 / token cap 补充实测）
 - `docs/eval/2026-10-21-android-smoke.md`
 - `docs/eval/2026-10-21-device-bench.md`
 - `docs/eval/2026-10-21-device-acceptance.md`
@@ -102,7 +108,9 @@ App 启动后模型卡片应显示“已就绪”。
 ## 已知限制
 
 - 1280px 对中文正文稳定，但数学公式/极小字号会误读；公式多的页面请切 2048px。
-- 2048px 在当前 8GB 中端机上约 2.5–3 分钟/页（4 threads）；公式多时再切。
+- 2048px 全量在当前 8GB 中端机上约 3–3.5 分钟/页（4 threads）；可用 cap 2560（约 3 分钟）或 cap 2048（约 2.3 分钟）换速度，后者公式/小字可能回退。
+- 1024px（约 768 image tokens）低于 clip 对 grounding 建议的 1024-token 下限；坐标/小字要求高时建议 1280。
+- `temperature=0` 目前会被 shim 回落为 0.2，不是严格 greedy；质量对比需固定 seed，后续会修。
 - 第一版只做单图，不做 PDF 多页、批量、历史记录。
 - grounding 坐标只在“原文”中保留，不做布局框叠加。
 - `flutter_markdown` 对 HTML 表格支持有限；表格内容以原文 tab 为准。
