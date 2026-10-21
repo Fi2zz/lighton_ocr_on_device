@@ -25,6 +25,10 @@ else()
     set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
 endif()
 
+if (ANDROID)
+    set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16" CACHE STRING "" FORCE)
+endif()
+
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/llama.cpp
                  ${CMAKE_BINARY_DIR}/llama.cpp)
 
@@ -44,5 +48,6 @@ set_target_properties(ocr_shim PROPERTIES
     VISIBILITY_INLINES_HIDDEN ON)
 
 if (ANDROID)
+    target_link_libraries(ocr_shim PRIVATE log)
     target_link_options(ocr_shim PRIVATE "-Wl,-z,max-page-size=16384")
 endif()

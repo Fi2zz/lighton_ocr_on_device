@@ -4,7 +4,7 @@ import 'package:lighton_ocr_on_device/src/ocr/ocr_types.dart';
 void main() {
   test('defaults match spec', () {
     const c = OcrConfig();
-    expect(c.longestEdge, 2048);
+    expect(c.longestEdge, 1280);
     expect(c.maxTokens, 4096);
     expect(c.nCtx, 12288);
     expect(c.nBatch, 2048);

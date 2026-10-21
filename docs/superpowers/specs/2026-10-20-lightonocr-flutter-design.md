@@ -103,7 +103,7 @@ python third_party/llama.cpp/convert_hf_to_gguf.py light_on_ocr_0.8b/models \
 - `lightonocr3-0.8b-Q8_0.gguf`
 - `lightonocr3-0.8b-Q4_K_M.gguf`
 
-默认使用 Q8_0。M4 根据实测结果按第 13 节的决策规则调整。
+默认使用 Q4_K_M（8GB 中端机实测：1280px 整页约 130s）。Q8_0 作为质量选项保留；M4 根据实测结果按第 13 节的决策规则调整。
 
 ### 4.3 M0 冒烟验证
 
@@ -234,14 +234,13 @@ size_t ocr_stats_size(void);
 ### 5.6 图片预处理与上下文参数
 
 - Dart 侧将图片校正 EXIF 后缩放到长边 `longestEdge`，只缩不放。
-- 默认 `longestEdge=2048`，可选 1536 / 2048 / 2560。
+- 默认 `longestEdge=1280`，可选 1024 / 1280 / 1536 / 2048。
 - 默认：
   - `n_ctx=12288`
   - `n_batch=2048`
   - `n_ubatch=512`（移动端内存上限；由 native 固定为 `min(n_batch, 512)`）
-  - `n_ubatch=4096`
   - `image_max_tokens=4096`
-  - `n_threads=min(6, Platform.numberOfProcessors)`
+  - `n_threads=min(8, Platform.numberOfProcessors)`
 - 若 mtmd 报 non-causal 且 `image_max_tokens > n_ubatch`，M4 调整 `image_max_tokens` 或 `n_ubatch`。
 - 第一版 `use_gpu=false`。
 
@@ -255,6 +254,10 @@ size_t ocr_stats_size(void);
 - `cmake.version = "3.22.1"`
 - 链接参数 `-Wl,-z,max-page-size=16384`，适配 Android 16 的 16KB page；若所用 AGP/NDK 支持，同时开启 `ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES`，并在 M1 用 `readelf -l` 确认对齐。
 - `AndroidManifest.xml` 设置 `android:extractNativeLibs="true"`，保证按 soname `dlopen`。
+- `android/gradle.properties` 增加 `disable-abi-filtering=true`，避免 Flutter 插件重新加入 arm32/x86。
+- `android/app/src/main/cpp/CMakeLists.txt` 在 `add_subdirectory` 前给 debug 追加 `-O3`：Flutter debug 默认 `-O0`，会让 llama.cpp 的 vision encode 慢 10–50 倍。
+- 在 `native/ocr_shim/CMakeLists.txt` 的 `add_subdirectory` 前设置 `GGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16`；Android 需要显式开启 ARM 优化。
+- `libocrshim.so` 额外链接 Android `log` 库（`__android_log_print`）。
 - 相机权限由 `image_picker` 需要时声明；相册使用系统 Photo Picker，无需存储权限。
 
 `android/app/src/main/cpp/CMakeLists.txt` 只做一件事：
@@ -449,16 +452,16 @@ native 层不得直接打印后静默返回；所有失败都写入错误缓冲�
 
 ### 9.4 验收指标
 
-以 `samples/report-1.jpg`、2048px、Q8_0 为基准：
+以 `samples/report-1.jpg`、1280px、Q4_K_M、8 threads 为默认基准：
 
 | 指标 | 目标 | 可接受 |
 |---|---|---|
-| 端到端耗时 | ≤ 120s | ≤ 240s |
-| 解码速度 | ≥ 3 tok/s | ≥ 1.5 tok/s |
-| 峰值 native 内存 | ≤ 2.0GB | ≤ 2.5GB |
+| 端到端耗时 | ≤ 150s | ≤ 210s |
+| 解码速度 | ≥ 10 tok/s | ≥ 6 tok/s |
+| 峰值 native 内存 | ≤ 2.5GB | ≤ 3.0GB |
 | 输出质量 | 标题/题干可辨认，无循环 | 主要段落可读，允许局部错字 |
 
-若 2048px 达不到“可接受”，按下面的顺序降级，并以最终采用的配置记录实测值。
+2048px 精度模式另算：目标 ≤300s，可接受 ≤360s。若默认配置达不到“可接受”，按下面的顺序降级，并以最终采用的配置记录实测值。
 
 指标不达标时的调整顺序：
 
@@ -507,14 +510,15 @@ M0 是硬门槛；失败即停止并汇报。
 
 以下参数不预先拍死，由 M4 数据决定：
 
-- 量化档位：若 Q8_0 满足 9.4，保持 Q8_0；否则改 Q4_K_M。若 Q4 质量明显下降且 Q8 仅略超时，优先降低图片长边而不是量化。
+- 量化档位：8GB 中端机默认 Q4_K_M；Q8_0 作为质量选项。若 Q8 在 1280px 下仍满足 9.4 可接受阈值，可在高端设备上切回 Q8。
 - 默认 OCR 模式：`grounding`。空 prompt（`plain`）在该 checkpoint 上会退化为图像描述，不作为默认。
-- 默认 `longestEdge`：在质量可接受的前提下选耗时更低者。
+- 默认 `longestEdge`：1280（约 130s/页）；2048 作为精度模式（约 4–5 分钟/页）。
+- 默认线程数：8（当前 SM6435 实测最优）；其他设备以实测为准。
 - 默认 `maxTokens`：覆盖 sample 最长输出并留 20% 余量。
-- 默认线程数：以真机实测最优值为准，范围 4–6。
 
 ## 14. 变更记录
 
 - 2026-10-20：初稿，基于三块设计确认结果。
 - 2026-10-20：评审通过，进入实现计划阶段。
 - 2026-10-20：M0 实测发现空 prompt 退化为图像描述；第一版默认改为 `grounding`，渲染时去掉坐标标记，不做布局框叠加。
+- 2026-10-21：真机 smoke 发现 Flutter debug native `-O0` 导致 vision encode 数分钟；改为 debug 也加 `-O3`。1280px/Q4 整页约 130s，默认长边改为 1280，默认量化改为 Q4_K_M。

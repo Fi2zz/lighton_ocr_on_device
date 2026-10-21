@@ -12,7 +12,7 @@ class OcrConfig {
   final int imageMaxTokens;
 
   const OcrConfig({
-    this.longestEdge = 2048,
+    this.longestEdge = 1280,
     this.maxTokens = 4096,
     this.nThreads = 4,
     this.seed = 42,
@@ -22,7 +22,7 @@ class OcrConfig {
   });
 
   factory OcrConfig.forDevice() {
-    final threads = Platform.numberOfProcessors < 6 ? Platform.numberOfProcessors : 6;
+    final threads = Platform.numberOfProcessors < 8 ? Platform.numberOfProcessors : 8;
     return OcrConfig(nThreads: threads < 1 ? 1 : threads);
   }
 
@@ -63,7 +63,7 @@ class OcrConfig {
     }
 
     return OcrConfig(
-      longestEdge: readInt('longestEdge', 2048),
+      longestEdge: readInt('longestEdge', 1280),
       maxTokens: readInt('maxTokens', 4096),
       nThreads: readInt('nThreads', 4),
       seed: readInt('seed', 42),

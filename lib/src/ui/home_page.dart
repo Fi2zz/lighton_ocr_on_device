@@ -223,9 +223,10 @@ class _HomePageState extends State<HomePage> {
                 initialValue: config.longestEdge,
                 decoration: const InputDecoration(labelText: '长边'),
                 items: const [
+                  DropdownMenuItem(value: 1024, child: Text('1024')),
+                  DropdownMenuItem(value: 1280, child: Text('1280')),
                   DropdownMenuItem(value: 1536, child: Text('1536')),
                   DropdownMenuItem(value: 2048, child: Text('2048')),
-                  DropdownMenuItem(value: 2560, child: Text('2560')),
                 ],
                 onChanged: (value) {
                   if (value != null) {

@@ -15,8 +15,8 @@
 - 只做 Android，`arm64-v8a`，`minSdk = 26`；iOS/macOS App 不在范围内。
 - 运行时完全离线；不得在 App 内发起模型下载或任何 OCR 网络请求。
 - 模型/量化产物不进入 git：`*.gguf`、`build-models/`、`build/eval/`、`.venv-model/` 必须被忽略。
-- 默认配置：`mode=grounding`、`longestEdge=2048`、`maxTokens=4096`、`nCtx=12288`、`nBatch=2048`、`nUbatch=512`、`imageMaxTokens=4096`、`seed=42`、`nThreads=min(6, Platform.numberOfProcessors)`、`temperature=0.2`。空 prompt 的 `plain` 模式保留，但不是默认。
-- 默认量化 Q8_0；只有第 18 节的实测触发时才改 Q4_K_M。
+- 默认配置：`mode=grounding`、`longestEdge=1280`、`maxTokens=4096`、`nCtx=12288`、`nBatch=2048`、`nUbatch=512`、`imageMaxTokens=4096`、`seed=42`、`nThreads=min(8, Platform.numberOfProcessors)`、`temperature=0.2`。空 prompt 的 `plain` 模式保留，但不是默认。
+- 默认量化 Q4_K_M（8GB 中端机实测）；Q8_0 作为质量选项。
 - Prompt 必须逐字节匹配（`thinking` 与 `response` 各有一个前导空格）：
 
   ```
@@ -495,6 +495,9 @@ set(LLAMA_BUILD_COMMON OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_MTMD ON CACHE BOOL "" FORCE)
 set(LLAMA_CURL OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
+if (ANDROID)
+  set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16" CACHE STRING "" FORCE)
+endif()
 if (APPLE)
   set(GGML_METAL ON CACHE BOOL "" FORCE)
   set(GGML_NATIVE ON CACHE BOOL "" FORCE)
@@ -724,6 +727,12 @@ git commit -m "feat(native): implement generation loop, stats, and cancellation"
 ```cmake
 cmake_minimum_required(VERSION 3.22)
 project(lightonocr_app CXX C)
+
+# Flutter debug native builds default to -O0; llama.cpp at -O0 is unusable.
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O3")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O3")
+set(CMAKE_ASM_FLAGS_DEBUG "${CMAKE_ASM_FLAGS_DEBUG} -O3")
+
 add_subdirectory(
   ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../native/ocr_shim
   ocr_shim)
@@ -810,7 +819,7 @@ Expected: 解析成功，`pubspec.lock` 更新。
 ```dart
 test('defaults match spec', () {
   const c = OcrConfig();
-  expect(c.longestEdge, 2048);
+  expect(c.longestEdge, 1280);
   expect(c.maxTokens, 4096);
   expect(c.nCtx, 12288);
   expect(c.nBatch, 2048);
@@ -1429,7 +1438,7 @@ class DeviceImageSourceService implements ImageSourceService {
 
 - 顶部模型状态卡片；未配置时点击跳转 `ModelSetupPage`。
 - 图片预览区：`Image.memory`；空状态两个按钮“拍照”“相册”。
-- 参数：长边 `DropdownButton`（1536/2048/2560），最大输出（2048/4096/8192）；变更调用 `service.updateConfig`。
+- 参数：长边 `DropdownButton`（1024/1280/1536/2048），最大输出（2048/4096/8192）；变更调用 `service.updateConfig`。
 - 主按钮：未配置“配置模型”；ready“开始识别”；running“取消”；loading 显示进度。
 - 运行前 `wakelock_plus.enable()`，结束后 `disable()`。
 - 识别成功 `Navigator.push(ResultPage(result: ..., imageBytes: ...))`。
@@ -1638,9 +1647,9 @@ git commit -m "test(android): record 8-sample acceptance results"
 
 在真机上对 `report-1`、`report-5` 跑：
 
-- 量化：Q8_0、Q4_K_M。
-- 长边：1536、2048、2560。
-- 线程：4、6。
+- 量化：Q4_K_M、Q8_0。
+- 长边：1280、1536、2048（1024 作为低质量快速档）。
+- 线程：6、8。
 
 每个组合记录端到端耗时、decode tok/s、峰值 RSS、输出质量（可读/局部错字/不可用）。
 
@@ -1648,10 +1657,9 @@ git commit -m "test(android): record 8-sample acceptance results"
 
 按 spec 第 13 节规则：
 
-- Q8_0 满足“目标”则保留；否则 Q4_K_M。
-- Q4 质量明显下降且 Q8 仅略超时 → 降长边，不降量化。
-- 默认长边选质量可接受且耗时更低者。
-- 默认线程数选实测最优值，范围 4–6。
+- 当前 8GB 中端机默认 Q4_K_M；Q8_0 作为质量选项。
+- 默认长边 1280；2048 作为精度模式。
+- 默认线程 8；其他设备以实测为准。
 
 - [ ] **Step 3: 更新默认值**
 

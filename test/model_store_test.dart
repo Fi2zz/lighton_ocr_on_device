@@ -104,7 +104,7 @@ void main() {
     await configFile.writeAsString('{not json');
 
     final loaded = await store().loadConfig();
-    expect(loaded.longestEdge, 2048);
+    expect(loaded.longestEdge, 1280);
     expect(loaded.maxTokens, 4096);
   });
 
