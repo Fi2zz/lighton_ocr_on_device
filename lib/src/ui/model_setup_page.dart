@@ -118,6 +118,7 @@ class _ModelSetupPageState extends State<ModelSetupPage> {
       } else {
         await widget.store.importMmproj(file, onProgress: onProgress);
       }
+      await widget.service.reset();
       await widget.service.initialize();
     } on OcrException catch (error) {
       if (mounted) {
@@ -195,6 +196,7 @@ class _ModelSetupPageState extends State<ModelSetupPage> {
 
     setState(() => _busy = true);
     await widget.store.deleteAll();
+    await widget.service.reset();
     await widget.service.initialize();
     if (!mounted) {
       return;

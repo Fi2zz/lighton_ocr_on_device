@@ -123,6 +123,7 @@ light_on_ocr_0.8b/*
 # LightOnOCR local artifacts
 *.gguf
 build-models/
+build-llama/
 build/eval/
 .venv-model/
 
