@@ -93,10 +93,11 @@ App 启动后模型卡片应显示“已就绪”。
 
 详细数据：
 
+- `docs/eval/2026-10-21-optimization-conclusion.md`（结论）
+- `docs/eval/2026-10-21-thread-tuning.md`
 - `docs/eval/2026-10-21-android-smoke.md`
 - `docs/eval/2026-10-21-device-bench.md`
 - `docs/eval/2026-10-21-device-acceptance.md`
-- `docs/eval/2026-10-21-thread-tuning.md`
 
 ## 已知限制
 
