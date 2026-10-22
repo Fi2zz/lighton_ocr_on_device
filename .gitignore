@@ -1,3 +1,8 @@
+# IDE / editor metadata
+.idea/
+*.iml
+.DS_Store
+
 # Miscellaneous
 *.class
 *.lock
@@ -126,6 +131,9 @@ build-models/
 build-llama/
 build/eval/
 .venv-model/
+
+# CMake build output (build commands live in docs/eval/)
+/build-*/
 
 # App lockfile is committed for reproducible builds
 !pubspec.lock
